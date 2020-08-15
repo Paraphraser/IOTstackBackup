@@ -214,8 +214,8 @@ I do it like this.
 1. Scaffolding:
 
 	```
-	$ mkdir ~/IOTstack/Logs
-	$ touch ~/IOTstack/Logs/backup_iotstack.log
+	$ mkdir ~/Logs
+	$ touch ~/Logs/backup_iotstack.log
 	```
 
 2. crontab entry:
@@ -225,6 +225,6 @@ I do it like this.
 	00	11	*	*	*	./bin/backup_iotstack >>./Logs/backup_iotstack.log 2>&1
 	```
 
-If everything works as expected, `~/IOTstack/Logs/backup_iotstack.log` will be empty. The actual log is written to *yyyy-mm-dd_hhmm.backup-log.txt* inside `~/IOTstack/backups`.
+If everything works as expected, `~/Logs/backup_iotstack.log` will be empty. The actual log is written to *yyyy-mm-dd_hhmm.backup-log.txt* inside `~/IOTstack/backups`.
 
-When things don't go as expected (eg a permissions issue), the information you will need for debugging will turn up in `~/IOTstack/Logs/backup_iotstack.log` and you may also find a "You have new mail" message on your next login.
+When things don't go as expected (eg a permissions issue), the information you will need for debugging will turn up in `~/Logs/backup_iotstack.log` and you may also find a "You have new mail" message on your next login.
