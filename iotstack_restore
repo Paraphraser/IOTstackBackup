@@ -1,0 +1,95 @@
+#!/bin/bash
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
+
+# support user renaming of script
+SCRIPT=$(basename "$0")
+
+# define the purpose of the required argument
+RUNTAG="$1"
+
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $SCRIPT runtag (eg yyyy-mm-dd_hhmm.hostname)"
+	exit -1
+fi
+
+# define your backup host - note that if SCPPATH is within a Dropbox
+# folder on SCPHOST then you will get Dropbox sync for free.
+SCPHOST="myhost.mydomain.com"
+SCPUSER="myuser"
+SCPPATH="/path/to/backup/directory/on/myhost"
+
+# assumptions
+IOTSTACK="$HOME/IOTstack"
+COMPOSENAME="docker-compose.yml"
+COMPOSE="$IOTSTACK/$COMPOSENAME"
+
+
+# check the key assumption
+if [ ! -d "$IOTSTACK" ] ; then
+   echo "Error: $IOTSTACK does not exist. This may indicate a problem with your installation."
+   echo ""
+   echo "Note - if you are trying to perform a \"bare metal\" restore,"
+   echo "       you need to do the following to establish the basic"
+   echo "       structures needed before a restore can work:"
+   echo "         1. Clone IOTstack from GitHub."
+   echo "         2. Run the menu and install Docker."
+   echo "         3. Reboot (suggested by the menu)."
+   exit -1
+fi
+
+echo "----- Starting $SCRIPT at $(date) -----"
+
+# make a temporary directory within the scope of IOTstack
+RESTOREDIR=$(mktemp -d -p "$IOTSTACK")
+
+# copy the backups into the restore directory
+echo "Attempting to fetch backup images for $RUNTAG"
+scp "$SCPUSER"@"$SCPHOST":"$SCPPATH"/"$RUNTAG".* "$RESTOREDIR"
+
+# presume that the stack is not running and does not need restarting
+RESTART="NO"
+
+# is the stack (or any part of it) running?
+if [ $(docker ps | wc -l) -gt 1 ] ; then
+
+   # yes! does the compose file exist?
+   if [ -e "$COMPOSE" ] ; then
+   
+      echo "Deactivating the stack"
+      docker-compose -f "$COMPOSE" down
+
+      # the stack should be re-launched on exit
+      RESTART="YES"
+
+   else
+
+      echo "Error: containers seem to be running but $COMPOSE does not exist."
+      echo "       this may produce unpredictable results. Please terminate all"
+      echo "       containers and try again."
+
+   fi
+
+fi
+
+# try to restore general backup (assumes general-backup.tar.gz)
+iotstack_restore_general "$RESTOREDIR" "$RUNTAG"
+
+# try to restore influx backup (assumes influx-backup.tar)
+iotstack_restore_influxdb  "$RESTOREDIR" "$RUNTAG"
+
+# clean up the temporary restore directory
+echo "Cleaning up"
+rm -rf "$RESTOREDIR"
+
+# should the stack be brought up?
+if [ "$RESTART" = "YES" ] ; then
+
+   # yes! if RESTART=YES then COMPOSE must exist
+   echo "Reactivating the stack"
+   docker-compose -f "$COMPOSE" up -d
+
+fi
+
+echo "----- Finished $SCRIPT at $(date) -----"

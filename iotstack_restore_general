@@ -1,0 +1,134 @@
+#!/bin/bash
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
+
+# support user renaming of script
+SCRIPT=$(basename "$0")
+
+# the default name and correct extension type is
+DEFAULTFILENAME="general-backup.tar.gz"
+
+# $1 is required and is either path to a .tar.gz or path to a folder
+# $2 is optional and is the runtag (yyyy-mm-dd_hhmm.host-name)
+# $3 is optional and overrides the default file name
+
+case "$#" in
+
+  1)
+    RESTORE_TAR_GZ=$(realpath "$1")
+    ;;
+
+  2 | 3)
+    RESTORE_TAR_GZ=$(realpath "$1/$2.${3:-"$DEFAULTFILENAME"}")
+    ;;
+
+  *)
+    echo "Usage 1: $SCRIPT path/to/$DEFAULTFILENAME"
+    echo "Usage 2: $SCRIPT path/to/backupdir runtag {override}"
+    echo "         (override defaults to $DEFAULTFILENAME)"
+    exit -1
+    ;;
+
+esac
+
+# it is an error if the restore tar does not exist
+if [ ! -e "$RESTORE_TAR_GZ" ] ; then
+   echo "Warning: $RESTORE_TAR_GZ does not exist - skipped"
+   exit 0
+fi
+
+# assumptions
+IOTSTACK="$HOME/IOTstack"
+COMPOSENAME="docker-compose.yml"
+COMPOSE="$IOTSTACK/$COMPOSENAME"
+SERVICESNAME="services"
+SERVICESROOT="$IOTSTACK/$SERVICESNAME"
+VOLUMESNAME="volumes"
+VOLUMESROOT="$IOTSTACK/$VOLUMESNAME"
+
+# check that the IOTstack folder exists
+if [ ! -d "$IOTSTACK" ] ; then
+   echo "Error: $IOTSTACK does not exist. This may indicate a problem with your installation."
+   exit -1
+fi
+
+# check that the stack is not running
+if [ $(docker ps | wc -l) -gt 1 ] ; then
+
+   echo "Error: The stack should NOT be running during a restore"
+   echo "       Please deactivate the stack and try the restore again"
+   exit -1
+
+fi
+
+echo "----- Starting iotstack_restore_general at $(date) -----"
+
+# make a temporary directory to unpack into
+RESTOREDIR=$(mktemp -d -p "$IOTSTACK")
+
+# define restored structures in terms of that
+SERVICESRESTOREDIR="$RESTOREDIR/$SERVICESNAME"
+VOLUMESRESTOREDIR="$RESTOREDIR/$VOLUMESNAME"
+COMPOSERESTORE="$RESTOREDIR/$COMPOSENAME"
+
+# unpack the general backup into that directory
+echo "unpacking $RESTORE_TAR_GZ"
+sudo tar -x --same-owner -z -f "$RESTORE_TAR_GZ" -C "$RESTOREDIR"
+
+# was a "services" directory restored?
+if [ -d "$SERVICESRESTOREDIR" ] ; then
+
+   echo "removing old $SERVICESNAME directory"
+   rm -rf "$SERVICESROOT"
+
+   echo "moving restored $SERVICESNAME into place"
+   mv "$SERVICESRESTOREDIR" "$SERVICESROOT"
+
+fi
+
+# was a "volumes" directory restored?
+if [ -d "$VOLUMESRESTOREDIR" ] ; then
+
+   echo "removing old $VOLUMESNAME directory"
+   sudo rm -rf "$VOLUMESROOT"
+
+   echo "moving restored $VOLUMESNAME into place"
+   sudo mv "$VOLUMESRESTOREDIR" "$VOLUMESROOT"
+
+fi
+
+# was a "docker-compose.yml" file restored?
+if [ -e "$COMPOSERESTORE" ] ; then
+
+   # yes! does a compose file exist?
+   if [ -e "$COMPOSE" ] ; then
+
+      # yes! compare restored with in-situ
+      cmp "$COMPOSERESTORE" "$COMPOSE"
+
+      # compare same?
+      if [ $? -ne 0 ] ; then
+
+          # no! leave in-situ alone but move the restored version
+          # into place with a tag
+          TAGGEDCOMPOSE="$COMPOSE".$(date +"%Y-%m-%d_%H%M")
+          echo "Restoring $COMPOSENAME as $TAGGEDCOMPOSE"
+          mv "$COMPOSERESTORE" "$TAGGEDCOMPOSE"
+
+      fi
+
+   else
+
+      # no! move the restored version into place
+      echo "Restoring $COMPOSENAME"
+      mv "$COMPOSERESTORE" "$COMPOSE"
+
+   fi
+
+fi
+
+echo "Cleaning up"
+rm -rf "$RESTOREDIR"
+
+echo "----- Finished iotstack_restore_general at $(date) -----"

@@ -1,0 +1,117 @@
+#!/bin/bash
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
+
+# support user renaming of script
+SCRIPT=$(basename "$0")
+
+# the default name and correct extension type is
+DEFAULTFILENAME="influx-backup.tar"
+
+# $1 is required and is either path to a .tar or the path to a folder
+# $2 is optional and is the runtag (yyyy-mm-dd_hhmm.host-name)
+# $3 is optional and overrides the default file name
+
+case "$#" in
+
+  1)
+    RESTORE_TAR=$(realpath "$1")
+    ;;
+
+  2 | 3)
+    RESTORE_TAR=$(realpath "$1/$2.${3:-"$DEFAULTFILENAME"}")
+    ;;
+
+  *)
+    echo "Usage 1: $SCRIPT path/to/$DEFAULTFILENAME"
+    echo "Usage 2: $SCRIPT path/to/backupdir runtag {override}"
+    echo "         (override defaults to $DEFAULTFILENAME)"
+    exit -1
+    ;;
+
+esac
+
+# it is an error if the restore tar does not exist
+if [ ! -e "$RESTORE_TAR" ] ; then
+   echo "Warning: $RESTORE_TAR does not exist - skipped"
+   exit 0
+fi
+
+# assumptions
+IOTSTACK="$HOME/IOTstack"
+COMPOSENAME="docker-compose.yml"
+COMPOSE="$IOTSTACK/$COMPOSENAME"
+BACKUPS="$IOTSTACK/backups"
+INFLUXBACKUP="$BACKUPS/influxdb"
+INFLUXBACKUPDB="$INFLUXBACKUP/db"
+INFLUXDATA="$IOTSTACK/volumes/influxdb/data"
+
+# check the key assumptions
+if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
+   echo "Error: One of the following does not exist:"
+   echo "   $IOTSTACK"
+   echo "   $COMPOSE"
+   echo "This may indicate a problem with your installation."
+   exit -1
+fi
+
+# check that influxdb is not running
+if [ $(docker ps | grep "influxdb" | wc -l) -gt 0 ] ; then
+
+   echo "Error: The influxdb container should NOT be running at the start of a restore"
+   echo "       Please deactivate the influxdb container and try the restore again"
+   exit -1
+
+fi
+
+# make sure the backups directory exists & has correct ownership & mode
+[ -d "$BACKUPS" ] || mkdir -m 755 -p "$BACKUPS"
+[ $(stat -c "%U:%G" "$BACKUPS") = "$USER:$USER" ] || sudo chown $USER:$USER "$BACKUPS"
+[ $(stat -c "%a" "$BACKUPS") = "755" ] || sudo chmod 755 "$BACKUPS"
+
+# make sure the influx backup directory exists & has correct ownership & mode
+[ -d "$INFLUXBACKUPDB" ] || sudo mkdir -m 755 -p "$INFLUXBACKUPDB"
+[ $(stat -c "%U:%G" "$INFLUXBACKUP") = "root:root" ] || sudo chown -R root:root "$INFLUXBACKUP"
+[ $(stat -c "%a" "$INFLUXBACKUP") = "755" ] || sudo chmod -R 755 "$INFLUXBACKUP"
+
+# now we can begin
+echo "----- Starting iotstack_restore_influxdb at $(date) -----"
+
+# the influx backup directory needs to be empty
+if [ $(ls -1 "$INFLUXBACKUPDB" | wc -l) -gt 0 ] ; then
+   echo "Erasing $INFLUXBACKUPDB"
+   sudo rm "$INFLUXBACKUPDB"/*
+fi
+
+# does the influx data root exist?
+if [ -d "$INFLUXDATA" ] ; then
+
+   # yes! it and its contents need to be erased
+   echo "Erasing $INFLUXDATA"
+   sudo rm -r "$INFLUXDATA"
+
+fi
+
+# unpack the restore tar
+echo "unpacking $RESTORE_TAR"
+sudo tar -x --same-owner -f "$RESTORE_TAR" -C "$INFLUXBACKUPDB"
+
+# bring up the influxdb container (done early to give time to start)
+echo "activating influxdb (temporarily)"
+docker-compose -f "$COMPOSE" up -d influxdb
+
+# wait for influx to be ready
+while ! nc -w 1 127.0.0.1 8086 ; do echo "waiting for Influx on port 8086"; sleep 1; done
+
+# tell influx to perform the restore
+echo "Telling influxd to restore a portable backup"
+docker exec influxdb influxd restore -portable /var/lib/influxdb/backup
+
+# take down influxdb
+echo "deactivating influxdb"
+docker-compose -f "$COMPOSE" stop influxdb
+docker-compose -f "$COMPOSE" rm -f influxdb
+
+echo "----- Finished iotstack_restore_influxdb at $(date) -----"
+

@@ -1,0 +1,107 @@
+#!/bin/bash
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
+
+# support user renaming of script
+SCRIPT=$(basename "$0")
+
+# the default name and correct extension type is
+DEFAULTFILENAME="general-backup.tar.gz"
+
+# $1 is required and is either path to a .tar.gz or path to a folder
+# $2 is optional and is the runtag (yyyy-mm-dd_hhmm.host-name)
+# $3 is optional and overrides the default file name
+
+case "$#" in
+
+  1)
+    BACKUP_TAR_GZ=$(realpath "$1")
+    ;;
+
+  2 | 3)
+    BACKUP_TAR_GZ=$(realpath "$1/$2.${3:-"$DEFAULTFILENAME"}")
+    ;;
+
+  *)
+    echo "Usage 1: $SCRIPT path/to/$DEFAULTFILENAME"
+    echo "Usage 2: $SCRIPT path/to/backupdir runtag {override}"
+    echo "         (override defaults to $DEFAULTFILENAME)"
+    exit -1
+    ;;
+
+esac
+
+# fail safe if the file already exists - no accidental overwrites
+if [ -e "$BACKUP_TAR_GZ" ] ; then
+   echo "Error: $BACKUP_TAR_GZ already exists - will not be overwritten"
+   exit -1
+fi
+
+# assumptions
+IOTSTACK="$HOME/IOTstack"
+COMPOSEPREFIX="docker-compose"
+COMPOSE="$IOTSTACK/$COMPOSEPREFIX.yml"
+
+# check the key assumptions
+if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
+   echo "Error: One of the following does not exist:"
+   echo "   $IOTSTACK"
+   echo "   $COMPOSE"
+   echo "This may indicate a problem with your installation."
+   exit -1
+fi
+
+# define files/folders to be included in the backup
+# (note - temporary file created in RAM)
+BACKUP_INCLUDE="$(mktemp -p /dev/shm/)"
+cat <<-INCLUSIONS >"$BACKUP_INCLUDE"
+./services/
+./volumes/
+INCLUSIONS
+
+# check that the items to be included exist
+for INCLUDE in $(cat $BACKUP_INCLUDE); do
+   I=$(realpath "$IOTSTACK/$INCLUDE")
+   if [ ! -e "$I" ]; then
+      echo "Error: $I does not exist. This may indicate a problem with your installation."
+      exit -1
+   fi
+done
+
+# add all docker-compose files in directory-relative form
+for INCLUDE in "$IOTSTACK/$COMPOSEPREFIX".* ; do
+   echo "."/$(basename "$INCLUDE") >> "$BACKUP_INCLUDE"
+done
+
+# define files/folders to be excluded from the backup
+# (note - temporary file created in RAM)
+BACKUP_EXCLUDE="$(mktemp -p /dev/shm/)"
+cat <<-EXCLUSIONS >"$BACKUP_EXCLUDE"
+./volumes/influxdb/*
+./volumes/nextcloud/*
+./volumes/postgres/*
+./volumes/pihole.restored
+EXCLUSIONS
+
+# now we can begin
+echo "----- Starting $SCRIPT at $(date) -----"
+
+# create the file (sets ownership correctly)
+touch "$BACKUP_TAR_GZ"
+
+# perform the backup (relative to ~/IOTstack)
+sudo tar \
+	-czf "$BACKUP_TAR_GZ" \
+	-C "$IOTSTACK" \
+	-X "$BACKUP_EXCLUDE" \
+	-T "$BACKUP_INCLUDE"
+
+# report size of archive
+du -h "$BACKUP_TAR_GZ"
+
+# clean up the working files
+rm $BACKUP_INCLUDE
+rm $BACKUP_EXCLUDE
+
+echo "----- Finished $SCRIPT at $(date) -----"

@@ -1,0 +1,90 @@
+#!/bin/bash
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
+
+# support user renaming of script
+SCRIPT=$(basename "$0")
+
+# the default name and correct extension type is
+DEFAULTFILENAME="influx-backup.tar"
+
+# $1 is required and is either path to a .tar or the path to a folder
+# $2 is optional and is the runtag (yyyy-mm-dd_hhmm.host-name)
+# $3 is optional and overrides the default file name
+
+case "$#" in
+
+  1)
+    BACKUP_TAR=$(realpath "$1")
+    ;;
+
+  2 | 3)
+    BACKUP_TAR=$(realpath "$1/$2.${3:-"$DEFAULTFILENAME"}")
+    ;;
+
+  *)
+    echo "Usage 1: $SCRIPT path/to/$DEFAULTFILENAME"
+    echo "Usage 2: $SCRIPT path/to/backupdir runtag {override}"
+    echo "         (override defaults to $DEFAULTFILENAME)"
+    exit -1
+    ;;
+
+esac
+
+# fail safe if the file already exists - no accidental overwrites
+if [ -e "$BACKUP_TAR" ] ; then
+   echo "Error: $BACKUP_TAR already exists - will not be overwritten"
+   exit -1
+fi
+
+# assumptions
+IOTSTACK="$HOME/IOTstack"
+BACKUPS="$IOTSTACK/backups"
+INFLUXBACKUP="$BACKUPS/influxdb"
+INFLUXBACKUPDB="$INFLUXBACKUP/db"
+
+# is influxdb running?
+if [ $(docker ps | grep -c "influxdb") -eq 0 ]; then
+   echo "Warning: influxdb container not running - backup skipped"
+   exit 0
+fi
+
+# make sure the backups directory exists & has correct ownership & mode
+[ -d "$BACKUPS" ] || mkdir -m 755 -p "$BACKUPS"
+[ $(stat -c "%U:%G" "$BACKUPS") = "$USER:$USER" ] || sudo chown $USER:$USER "$BACKUPS"
+[ $(stat -c "%a" "$BACKUPS") = "755" ] || sudo chmod 755 "$BACKUPS"
+
+# make sure the influx backup directory exists & has correct ownership & mode
+[ -d "$INFLUXBACKUPDB" ] || sudo mkdir -m 755 -p "$INFLUXBACKUPDB"
+[ $(stat -c "%U:%G" "$INFLUXBACKUP") = "root:root" ] || sudo chown -R root:root "$INFLUXBACKUP"
+[ $(stat -c "%a" "$INFLUXBACKUP") = "755" ] || sudo chmod -R 755 "$INFLUXBACKUP"
+
+# now we can begin
+echo "----- Starting $SCRIPT at $(date) -----"
+
+# create the file (sets ownership)
+touch "$BACKUP_TAR"
+
+# the influx backup directory needs to be empty
+if [ $(ls -1 "$INFLUXBACKUPDB" | wc -l) -gt 0 ] ; then
+   echo "Erasing $INFLUXBACKUPDB"
+   sudo rm "$INFLUXBACKUPDB"/*
+fi
+
+# tell influx to perform the backup
+echo "Telling influxd to create a portable backup"
+docker exec influxdb influxd backup -portable /var/lib/influxdb/backup
+
+# sweep the backup into a tar (sudo is needed because backup files are
+# created with owner root, group root, mode 600)
+echo "Collecting the backup files into a tar"
+sudo tar \
+	-cf "$BACKUP_TAR" \
+	-C "$INFLUXBACKUPDB" \
+	.
+
+# report size of archive
+du -h "$BACKUP_TAR"
+
+echo "----- Finished $SCRIPT at $(date) -----"

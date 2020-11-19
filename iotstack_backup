@@ -1,0 +1,71 @@
+#!/bin/bash
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
+
+# support user renaming of script
+SCRIPT=$(basename "$0")
+
+# define the purpose of the optional argument, with appropriate default
+RUNTAG=${1:-$(date +"%Y-%m-%d_%H%M").$HOSTNAME}
+
+if [ "$#" -gt 1 ]; then
+    echo "Usage: $SCRIPT {runtag}"
+	exit -1
+fi
+
+# define your backup host - note that if SCPPATH is within a Dropbox
+# folder on SCPHOST then you will get Dropbox sync for free.
+SCPHOST="myhost.mydomain.com"
+SCPUSER="myuser"
+SCPPATH="/path/to/backup/directory/on/myhost"
+
+# assumptions
+IOTSTACK="$HOME/IOTstack"
+COMPOSENAME="docker-compose.yml"
+COMPOSE="$IOTSTACK/$COMPOSENAME"
+BACKUPS="$IOTSTACK/backups"
+LOGNAME="backup-log"
+LOGFILE="$RUNTAG.$LOGNAME.txt"
+GENERALNAME="general-backup"
+INFLUXNAME="influx-backup"
+
+# check the key assumptions
+if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
+   echo "Error: One of the following does not exist:"
+   echo "   $IOTSTACK"
+   echo "   $COMPOSE"
+   echo "This may indicate a problem with your installation."
+   exit -1
+fi
+
+# make sure the backups directory exists, has correct ownership & mode
+[ -d "$BACKUPS" ] || mkdir -m 755 -p "$BACKUPS"
+[ $(stat -c "%U:%G" "$BACKUPS") = "$USER:$USER" ] || sudo chown $USER:$USER "$BACKUPS"
+[ $(stat -c "%a" "$BACKUPS") = "755" ] || sudo chmod 755 "$BACKUPS"
+
+# move into the backups directory
+cd "$BACKUPS"
+
+# ensure that the log exists and redirect to it
+touch "$LOGFILE"
+exec >> "$LOGFILE"
+exec 2>> "$LOGFILE"
+
+echo "----- Starting $SCRIPT at $(date) -----"
+
+# perform the general backup
+iotstack_backup_general "$BACKUPS" "$RUNTAG"
+
+# perform the influx backup
+iotstack_backup_influxdb "$BACKUPS" "$RUNTAG"
+
+# copy the files
+scp "$RUNTAG".* $SCPUSER@$SCPHOST:$SCPPATH
+
+# cleanup
+ls -t1 *."$GENERALNAME".* 2>/dev/null | tail -n +8 | xargs rm -f
+ls -t1 *."$INFLUXNAME".* 2>/dev/null | tail -n +8 | xargs rm -f
+ls -t1 *."$LOGNAME".* 2>/dev/null | tail -n +8 | xargs rm -f
+
+echo "----- Finished $SCRIPT at $(date) -----"
