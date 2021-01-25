@@ -63,12 +63,7 @@ Notes:
 * the trailing "." on the second `scp` command means "the working directory on the RPi where you are running the command".
 * in both `scp` commands, "test.txt" is implied on the right hand side.
 
-Your goal is that both of the `scp` commands should work without prompting for passwords or the need to accept fingerprints:
-
-* Avoiding password prompts is generally a matter of using `ssh-keygen` to generate a key-pair on the RPi, then copying the public key to the target computer (eg with `ssh-copy-id`) and concatenating it to the authorized_keys file on the target.
-* Fingerprint prompts are mostly one-time events but can recur if your devices change their IP addresses (eg the IP address is assigned from a DHCP server's dynamic pool). You can avoid this by using static DHCP assignments (if you can) or static IP addresses (if you have no other choice).
-
-> The exact how-to of ssh setup is beyond the scope of this ReadMe. Google is your friend.
+Your goal is that both of the `scp` commands should work without prompting for passwords or the need to accept fingerprints. If you don't know how to do that, [follow this tutorial](ssh_tutorial.md).
 
 ### Option 2: roll your own
 
@@ -232,10 +227,12 @@ iotstack_restore_general path/to/backupdir runtag {general-backup.tar.gz}
 
 	† if you removed the `postgres` exclusion from `iotstack_backup_general` then the postgres directory will be restored in as-backed-up state.
 	
-`docker-compose.yml` is given special handling:
+`docker-compose.yml` is given special handling. This is to cater for two distinct situations:
 
-* If `docker-compose.yml` is **not** present in `~/IOTstack` then `docker-compose.yml` will be restored from *path_to.tar.gz*.
-* If `docker-compose.yml` **is** present in `~/IOTstack` then `docker-compose.yml` in `~/IOTstack` will be compared with `docker-compose.yml` from *path_to.tar.gz*. If and only if the two files do not compare the same, `docker-compose.yml` from *path_to.tar.gz* will be restored into `~/IOTstack` with a date-time suffix.
+* On a bare-metal restore, `docker-compose.yml` will **not** be present in `~/IOTstack`. The `docker-compose.yml` from the backup will be restored from *path_to.tar.gz*.
+* If `docker-compose.yml` is already present in `~/IOTstack` then it may be the same as the backup or contain customisations that should not be overwritten. The restore compares `docker-compose.yml` in `~/IOTstack` with `docker-compose.yml` from *path_to.tar.gz*:
+	* If the two files compare the same then nothing happens.
+	* If the two files do not compare the same, `docker-compose.yml` from *path_to.tar.gz* will be restored into `~/IOTstack` with a date-time suffix. If you want to use the `docker-compose.yml` that was restored from the backup, you have to move it into place by hand.
 
 The reason for implementing the "general" restore as a standalone script is to make it easier to manage snapshots and/or build your own backup strategy.
 
