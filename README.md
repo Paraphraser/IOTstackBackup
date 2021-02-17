@@ -103,12 +103,12 @@ to
 BACKUP_METHOD="RSYNC"
 ```
 
-The essential difference between "SCP" and "RSYNC" has to do with how backups are pruned. `iotstack_backup` finishes each run with a series of commands that result in only the last 7 backups being retained **on the Raspberry Pi**.
+The essential difference between "SCP" and "RSYNC" has to do with how backups are pruned. `iotstack_backup` finishes each run with a series of commands that result in only the last 7 backups being retained **on the RPi**.
 
 If you set BACKUP_METHOD to:
 
 * "SCP" (the default), each run of `iotstack_backup` copies the backup files produced by **that** run to the target folder on the target computer. The script does not auto-prune the target folder. The result is that backup files _on the target computer_ will be retained until you take some action to remove them.
-* "RSYNC", the the target folder on the target computer will be kept in sync with the backup folder on your Raspberry Pi. Because the auto-pruning on the Raspberry Pi occurs **after** the `rsync` invocation, in practice, the target computer will have the last 8 backups.
+* "RSYNC", the target folder on the target computer will be kept in sync with the backup folder on your Raspberry Pi. Because the auto-pruning on the Raspberry Pi occurs **after** the `rsync` invocation, in practice, the target computer will have the last 8 backups.
 
 ### <a name="optionOwn"> Option 3: roll your own </a>
 
