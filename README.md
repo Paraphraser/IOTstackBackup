@@ -4,7 +4,7 @@ This project documents my approach to backup and restore of [SensorsIot/IOTstack
 
 1. Avoid the double-compression implicit in the official backup scripts:
 	* An InfluxDB portable backup produces .tar.gz files. Simply collecting those into a separate .tar is more efficient than recompressing them into a .tar.gz.
-2. Use `scp` to copy the backups from my "live" RPi to another machine on my local network. In my case, the target folder on that "other machine" is within the scope of Dropbox so I get three levels of backup:
+2. Use `scp` or `rsync` to copy the backups from my "live" RPi to another machine on my local network. In my case, the target folder on that "other machine" is within the scope of Dropbox so I get three levels of backup:
 	* Recent backups are stored on the local RPi in `~/IOTstack/backups/`
 	* On-site copies on the "other machine"
 	* Off-site copies in the Dropbox cloud. 
@@ -23,13 +23,36 @@ At the time of writing, there is no equivalent for `iotstack_restore` in [Sensor
 
 If you are running `nextcloud` or any container type which is not *copy-safe*, it is up to you to come up with an appropriate solution. Most database packages have their own backup & restore mechanisms. It is just a matter of working out what those are, how to implement them in a Docker environment, and then bolting that into your backup/restore scripts.
 
-## setup
+## Contents
+
+- [setup](#setup)
+	- [Option 1: use `scp`](#scpOption)
+	- [Option 2: use `rsync`](#rsyncOption)
+	- [Option 3: roll your own](#optionOwn)
+	- [Option 4: invert the problem](#optionInvert)
+- [The backup side of things](#backupSide)
+	- [script 1: iotstack\_backup\_general](#iotstackBackupGeneral)
+	- [script 2: iotstack\_backup\_influxdb](#iotstackBackupInfluxdb)
+	- [script 3: iotstack\_backup](#iotstackBackup)
+- [The restore side of things](#restoreSide)
+	- [script 1: iotstack\_restore\_general](#iotstackRestoreGeneral)
+	- [script 2: iotstack\_restore\_influxdb](#iotstackRestoreInfluxdb)
+	- [iotstack\_restore](#iotstackRestore)
+- [Bare-metal restore](#bareMetalRestore)
+- [iotstack\_reload\_influxdb](#iotstackReloadInfluxdb)
+- [Notes](#endNotes)
+	- [about *runtag*](#aboutRuntag)
+	- [about InfluxDB backup and restore commands](#aboutInfluxCommands)
+	- [about InfluxDB database restoration](#aboutInfluxRestore)
+	- [using `cron` to run `iotstack_backup`](#usingcron)
+
+## <a name="setup"> setup </a>
 
 Clone or download the contents of this repository.
 
-> In my case, I move the scripts into `~/bin` which is in my `PATH` environment variable. See also [using cron](#usingcron).
+> In my case, I move the scripts into `~/.local/bin` which is in my `PATH` environment variable. See also [using cron](#usingcron).
 
-### Option 1: use `scp`
+### <a name="scpOption"> Option 1: use `scp` </a>
 
 If you want to follow my approach and use `scp` to copy the backups to another host, you will need to edit both `iotstack_backup` and `iotstack_restore` to change these three lines:
 
@@ -55,6 +78,8 @@ $ rm test.txt
 $ scp $SCPUSER@$SCPHOST:$SCPPATH/test.txt .
 ```
 
+Your goal is that both of the `scp` commands should work without prompting for passwords or the need to accept fingerprints. If you don't know how to do that, [follow this tutorial](ssh_tutorial.md).
+
 Notes:
 
 * «SCPPATH» should not contain embedded spaces or other characters that are open to misinterpretation by `bash`. If this is a deal-breaker then you will have to do the work of making sure that $SCPPATH is quoted properly wherever it appears.
@@ -62,22 +87,48 @@ Notes:
 * in the case of «SCPPATH» a leading "." normally means "the home directory of «SCPUSER» on the target machine. You can also use an absolute path (ie starting with a "/").
 * the trailing "." on the second `scp` command means "the working directory on the RPi where you are running the command".
 * in both `scp` commands, "test.txt" is implied on the right hand side.
+* if you set up `~/.ssh/config` correctly, you can omit the «SCPUSER» from your tests because it will be implied.
 
-Your goal is that both of the `scp` commands should work without prompting for passwords or the need to accept fingerprints. If you don't know how to do that, [follow this tutorial](ssh_tutorial.md).
+### <a name="rsyncOption"> Option 2: use `rsync` </a>
 
-### Option 2: roll your own
+`rsync` uses `scp` but performs more work. The setup is the same so follow the instructions in the previous section and then edit the `iotstack_backup` script to change:
 
-If you don't want to use `scp`, you could:
+```
+BACKUP_METHOD="SCP"
+```
 
-* re-implement one of the cloud approaches in the original [docker_backup.sh](https://github.com/SensorsIot/IOTstack/blob/master/scripts/docker_backup.sh)
+to
+
+```
+BACKUP_METHOD="RSYNC"
+```
+
+The essential difference between "SCP" and "RSYNC" has to do with how backups are pruned. `iotstack_backup` finishes each run with a series of commands that result in only the last 7 backups being retained **on the Raspberry Pi**.
+
+If you set BACKUP_METHOD to:
+
+* "SCP" (the default), each run of `iotstack_backup` copies the backup files produced by **that** run to the target folder on the target computer. The script does not auto-prune the target folder. The result is that backup files _on the target computer_ will be retained until you take some action to remove them.
+* "RSYNC", the the target folder on the target computer will be kept in sync with the backup folder on your Raspberry Pi. Because the auto-pruning on the Raspberry Pi occurs **after** the `rsync` invocation, in practice, the target computer will have the last 8 backups.
+
+### <a name="optionOwn"> Option 3: roll your own </a>
+
+If you don't want to use `scp` or `rsync`, you could:
+
+* re-implement one of the cloud approaches in the [SensorsIot/IOTstack](https://github.com/SensorsIot/IOTstack/) original
 * come up with another cloud backup mechanism of your own choosing
 * attach a backup drive to your RPi and simply copy the backup files.
 
-### Option 3: invert the problem
+The selection of backup method is implemented as a `case` statement so you should be able to implement your own scheme simply by adding another case.
+
+Note:
+
+* `iotstack_restore` will work "as is" with either the SCP or RSYNC backup methods, but you will probably have to solve the restore-side problem if you roll your own backup method.
+
+### <a name="optionInvert"> Option 4: invert the problem </a>
 
 It would be perfectly valid to omit any automatic copying steps from the RPi side of things. You could just as easily remote-mount the RPi's working drive on another computer and run a script there that copies the backups.
 
-## The backup side of things
+## <a name="backupSide"> The backup side of things </a>
 
 There are three scripts:
 
@@ -91,7 +142,7 @@ In general, `iotstack_backup` is the script you should call.
 
 > Acknowledgement: the backup scripts were based on [Graham Garner's backup script](https://github.com/gcgarner/IOTstack/blob/master/scripts/docker_backup.sh) as at 2019-11-17.
 
-### script 1: iotstack\_backup\_general
+### <a name="iotstackBackupGeneral"> script 1: iotstack\_backup\_general </a>
 
 Usage (two forms):
 
@@ -131,7 +182,7 @@ $ cd my_special_backups
 $ iotstack_backup_general before_major_changes.tar.gz
 ```
 
-### script 2: iotstack\_backup\_influxdb
+### <a name="iotstackBackupInfluxdb"> script 2: iotstack\_backup\_influxdb </a>
 
 Usage (two forms):
 
@@ -162,7 +213,7 @@ $ cd my_special_backups
 $ iotstack_backup_influxdb before_major_changes.tar
 ```
 
-### script 3: iotstack\_backup
+### <a name="iotstackBackup"> script 3: iotstack\_backup </a>
 
 Usage:
 
@@ -187,7 +238,7 @@ The script invokes `iotstack_backup_general` and `iotstack_backup_influxdb` (in 
 The files are copied to the target host using `scp` (or whatever substitute method you supply) and then `~/IOTstack/backups` is cleaned up to remove older backups.
 
 
-## The restore side of things
+## <a name="restoreSide"> The restore side of things </a>
 
 There are three scripts which provide the inverse functionality of the backup scripts:
 
@@ -197,7 +248,7 @@ There are three scripts which provide the inverse functionality of the backup sc
 
 In general, `iotstack_restore` is the script you should call.
 
-### script 1: iotstack\_restore\_general
+### <a name="iotstackRestoreGeneral"> script 1: iotstack\_restore\_general </a>
 
 Usage (two forms):
 
@@ -243,7 +294,7 @@ $ cd ~/my_special_backups
 $ iotstack_restore_general before_major_changes.tar.gz
 ```
 
-### script 2: iotstack\_restore\_influxdb
+### <a name="iotstackRestoreInfluxdb"> script 2: iotstack\_restore\_influxdb </a>
 
 Usage (two forms):
 
@@ -271,7 +322,7 @@ iotstack_restore_influxdb path/to/backupdir runtag {influx-backup.tar}
 	* instructing influx to restore the contents of `~/IOTstack/backups/influxdb/db`
 	* terminating the `influxdb` container.
 
-### script 3: iotstack_restore
+### <a name="iotstackRestore"> iotstack\_restore </a>
 
 Usage:
 
@@ -302,7 +353,7 @@ Both `iotstack_restore_general` and `iotstack_restore_influxdb` are invoked with
 
 Each script assumes that the path to its backup file can be derived from those two arguments. This will be true if the backup was created by `iotstack_backup` but is something to be aware of if you roll your own solution.
 
-## Bare-metal restore
+## <a name="bareMetalRestore"> Bare-metal restore </a>
 
 Scenario. Your SD card wears out, or your Raspberry Pi emits magic smoke, or you decide the time has come for a fresh start:
 
@@ -314,7 +365,7 @@ Scenario. Your SD card wears out, or your Raspberry Pi emits magic smoke, or you
 6. Run `iotstack_restore` with the runtag of a recent backup. Among other things, this will recover `docker-compose.yml` (ie there is no need to run the menu and re-select your services).
 7. Bring up the stack.
 
-## iotstack\_reload\_influxdb
+## <a name="iotstackReloadInfluxdb"> iotstack\_reload\_influxdb </a>
 
 Usage:
 
@@ -345,7 +396,7 @@ See also:
 * [about InfluxDB backup and restore commands](#aboutInfluxCommands)
 * [about InfluxDB database restoration](#aboutInfluxRestore).
 
-## Notes
+## <a name="endNotes"> Notes </a>
 
 ### <a name="aboutRuntag">about *runtag*</a>
 

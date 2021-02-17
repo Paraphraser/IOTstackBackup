@@ -20,6 +20,13 @@ SCPHOST="myhost.mydomain.com"
 SCPUSER="myuser"
 SCPPATH="/path/to/backup/directory/on/myhost"
 
+# choose a backup method. SCP saves the results of THIS backup run.
+# RSYNC synchronises the RPi backup folder with SCPHOST.
+# The essential difference is that RSYNC will result in old backups
+# being removed from the target whereas, with SCP, old backups will be
+# preserved until you take some action to remove them.
+BACKUP_METHOD="SCP"
+
 # assumptions
 IOTSTACK="$HOME/IOTstack"
 COMPOSENAME="docker-compose.yml"
@@ -60,8 +67,25 @@ iotstack_backup_general "$BACKUPS" "$RUNTAG"
 # perform the influx backup
 iotstack_backup_influxdb "$BACKUPS" "$RUNTAG"
 
-# copy the files
-scp "$RUNTAG".* $SCPUSER@$SCPHOST:$SCPPATH
+# copy the files (keep in mind that log entries written after the
+# log is copied to the remote will only be in the local log).
+case "$BACKUP_METHOD" in
+
+  "SCP")
+    scp "$RUNTAG".* $SCPUSER@$SCPHOST:$SCPPATH
+    ;;
+
+  "RSYNC")
+    # note that the slash after "$BACKUPS" is required!
+    rsync -vrt --delete --exclude=influxdb "$BACKUPS"/ $SCPUSER@$SCPHOST:$SCPPATH
+    ;;
+
+  *)
+    echo "Warning: $BACKUP_METHOD backup method is not supported"
+    echo "Warning: The only backup files are the ones in $BACKUPS"
+    ;;
+
+esac
 
 # cleanup
 ls -t1 *."$GENERALNAME".* 2>/dev/null | tail -n +8 | xargs rm -f
