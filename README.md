@@ -122,7 +122,7 @@ The selection of backup method is implemented as a `case` statement so you shoul
 
 Note:
 
-* `iotstack_restore` will work "as is" with either the SCP or RSYNC backup methods, but you will probably have to solve the restore-side problem if you roll your own backup method.
+* `iotstack_restore` will work "as is" with either the SCP or RSYNC backup methods. If you roll your own method for getting backup files off of the RPi, you will also have to think about how to get backup files back onto the RPi so they are available during a restore.
 
 ### <a name="optionInvert"> Option 4: invert the problem </a>
 
@@ -359,8 +359,28 @@ Scenario. Your SD card wears out, or your Raspberry Pi emits magic smoke, or you
 
 1. Image a new SD card and/or build an SSD image.
 2. Install all the necessary (git, curl) and desirable packages (acl, jq, sqlite3, uuid-runtime, wget).
-3. Clone [SensorsIot/IOTstack](https://github.com/SensorsIot/IOTstack).
-4. Run the IOTstack menu and install Docker.
+3. Clone the [SensorsIot/IOTstack](https://github.com/SensorsIot/IOTstack) repository.
+
+	```
+	$ cd
+	$ git clone -b old-menu https://github.com/SensorsIot/IOTstack.git IOTstack
+	```
+ 
+	Note:
+	
+	* if you prefer "new menu" then omit the `-b old-menu`
+
+4. Mimic how the menu installs Docker and Docker-Compose (the following is a superset of old- and new-menu):
+
+	```	
+	$ curl -fsSL https://get.docker.com | sh
+	$ sudo usermod -G docker -a $USER
+	$ sudo usermod -G bluetooth -a $USER
+	$ sudo apt install -y python3-pip python3-dev
+	$ sudo pip3 install -U docker-compose
+	$ sudo pip3 install -U ruamel.yaml==0.16.12 blessed
+	```
+	
 5. Reboot.
 6. Run `iotstack_restore` with the runtag of a recent backup. Among other things, this will recover `docker-compose.yml` (ie there is no need to run the menu and re-select your services).
 7. Bring up the stack.
@@ -453,13 +473,15 @@ I do it like this.
 	$ mkdir ~/Logs
 	$ touch ~/Logs/iotstack_backup.log
 	```
+	
 2. crontab preamble:
 
 	```
 	SHELL=/bin/bash
 	HOME=/home/pi
-	PATH=/home/pi/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+	PATH=/home/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 	```
+	
 3. crontab entry:
 
 	```
