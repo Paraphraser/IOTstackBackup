@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
+
+# the configuration file is at
+CONFIG_YML="$HOME/.config/iotstack_backup/config.yml"
+
+# does the configuration file exist?
+if [ -e "$CONFIG_YML" ] ; then
+
+   # try to fetch from yml file
+   BACKUP_METHOD=$(niet .backup.method "$CONFIG_YML")
+   BACKUP_PREFIX=$(niet .backup.prefix "$CONFIG_YML")
+   LOCAL_RETAIN=$(niet .backup.retain "$CONFIG_YML")
+   RESTORE_METHOD=$(niet .restore.method "$CONFIG_YML")
+   RESTORE_PREFIX=$(niet .restore.prefix "$CONFIG_YML")
+
+   # emit results
+   echo "Found the following configuration:"
+   echo "  Configuration file = $CONFIG_YML"
+   echo "       backup method = $BACKUP_METHOD"
+   echo "       remote prefix = $BACKUP_PREFIX"
+   echo "        local retain = $LOCAL_RETAIN"
+   echo "      restore method = $RESTORE_METHOD"
+   echo "       remote prefix = $RESTORE_PREFIX"
+
+   # form example cloud paths
+   BACKUP_PATH="$BACKUP_PREFIX/$HOSTNAME"
+   RESTORE_PATH="$RESTORE_PREFIX/$HOSTNAME"
+
+   echo "Using this host as an example, backups would be saved to:"
+   echo "   $BACKUP_PATH"
+   echo "and restores would be fetched from:"
+   echo "   $RESTORE_PATH"
+
+else
+   echo "Warning: Configuration file not found!"
+   echo "         $CONFIG_YML"
+fi

@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
+
+# support user renaming of script
+SCRIPT=$(basename "$0")
+
+USAGE=0
+
+case "$#" in
+
+  0 )
+    RUNTAG=${1:-$(date +"%Y-%m-%d_%H%M").$HOSTNAME}
+    BY_HOST_DIR=$HOSTNAME
+    ;;
+
+  1 )
+    # anything that looks like an option (- -h --help)?
+    if [ ${1::1} == "-" ] ; then
+       USAGE=1
+    else
+       RUNTAG="$1"
+       BY_HOST_DIR=$HOSTNAME
+    fi
+    ;;
+
+  2 )
+    RUNTAG="$1"
+    BY_HOST_DIR="$2"
+    ;;
+
+  *)
+    USAGE=1
+    ;;
+
+esac
+
+if [ $USAGE -ne 0 ] ; then
+   echo "Usage: $SCRIPT {runtag} {by_host_dir}"
+   echo "where:"
+   echo "  runtag defaults to $(date +"%Y-%m-%d_%H%M").$HOSTNAME)"
+   echo "  by_host_dir defaults to $HOSTNAME"
+   exit -1
+fi
+
+# the configuration file is at
+CONFIG_YML="$HOME/.config/iotstack_backup/config.yml"
+
+# does the configuration file exist?
+if [ -e "$CONFIG_YML" ] ; then
+   CLOUD_METHOD=$(niet -s .backup.method "$CONFIG_YML") ;
+   CLOUD_PREFIX=$(niet -s .backup.prefix "$CONFIG_YML") ;
+   LOCAL_RETAIN=$(niet -s .backup.retain "$CONFIG_YML") ;
+else
+   echo "Warning: Configuration file not found: $CONFIG_YML"
+fi
+
+# apply defaults if not set from configuration file
+CLOUD_METHOD=${CLOUD_METHOD:-"SCP"}
+CLOUD_PREFIX=${CLOUD_PREFIX:-"myuser@myhost.mydomain.com:/path/to/backup/directory/on/myhost"}
+LOCAL_RETAIN=${LOCAL_RETAIN:-"8"}
+
+# form the cloud path
+CLOUD_PATH="$CLOUD_PREFIX/$BY_HOST_DIR"
+
+# assumptions
+IOTSTACKDIR="$HOME/IOTstack"
+BACKUPSDIR="$IOTSTACKDIR/backups"
+COMPOSE="$IOTSTACKDIR/docker-compose.yml"
+LOGNAME="backup-log"
+LOGFILE="$RUNTAG.$LOGNAME.txt"
+GENERALNAME="general-backup"
+INFLUXNAME="influx-backup"
+
+# check the key assumptions
+if ! [ -d "$IOTSTACKDIR" -a -e "$COMPOSE" ] ; then
+   echo "Error: One of the following does not exist:"
+   echo "   $IOTSTACKDIR"
+   echo "   $COMPOSE"
+   echo "This may indicate a problem with your installation."
+   exit -1
+fi
+
+# make sure the backups directory exists, has correct ownership & mode
+[ -d "$BACKUPSDIR" ] || mkdir -m 755 -p "$BACKUPSDIR"
+[ $(stat -c "%U:%G" "$BACKUPSDIR") = "$USER:$USER" ] || sudo chown $USER:$USER "$BACKUPSDIR"
+[ $(stat -c "%a" "$BACKUPSDIR") = "755" ] || sudo chmod 755 "$BACKUPSDIR"
+
+# move into the backups directory
+cd "$BACKUPSDIR"
+
+# ensure that the log exists and redirect to it
+touch "$LOGFILE"
+exec >> "$LOGFILE"
+exec 2>> "$LOGFILE"
+
+echo "----- Starting $SCRIPT at $(date) -----"
+echo "CLOUD_METHOD = $CLOUD_METHOD"
+echo "CLOUD_PREFIX = $CLOUD_PREFIX"
+echo "  CLOUD_PATH = $CLOUD_PATH"
+
+# perform the general backup
+iotstack_backup_general "$BACKUPSDIR" "$RUNTAG"
+
+# perform the influx backup
+iotstack_backup_influxdb "$BACKUPSDIR" "$RUNTAG"
+
+# copy the files (keep in mind that log entries written after the
+# log is copied to the remote will only be in the local log).
+case "$CLOUD_METHOD" in
+
+  "RCLONE" )
+    rclone sync -v \
+       "$BACKUPSDIR" \
+       "$CLOUD_PATH" \
+       --exclude "$LOGFILE" \
+       --exclude "influxdb/**"
+    ;;
+
+  "RSYNC" )
+    # note that the slash after "$BACKUPSDIR" is required!
+    rsync -vrt --delete \
+      --exclude="$LOGFILE" \
+      --exclude=influxdb \
+      "$BACKUPSDIR"/ \
+      "$CLOUD_PATH"
+    ;;
+
+  "SCP" )
+    scp "$RUNTAG".* "$CLOUD_PATH"
+    ;;
+
+  *)
+    echo "Warning: $CLOUD_METHOD backup method is not supported"
+    echo "Warning: The only backup files are the ones in $BACKUPSDIR"
+    ;;
+
+esac
+
+# cleanup
+for ITEM in "$GENERALNAME" "$INFLUXNAME" "$LOGNAME" ; do
+   ls -t1 *."$ITEM".* 2>/dev/null | tail -n +$LOCAL_RETAIN | xargs rm -f
+done
+
+echo "----- Finished $SCRIPT at $(date) -----"

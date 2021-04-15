@@ -1,0 +1,8 @@
+backup:
+  method: "RCLONE"
+  prefix: "remote:path/to/backups"
+  retain: 8
+
+restore:
+  method: "RCLONE"
+  prefix: "remote:path/to/backups"

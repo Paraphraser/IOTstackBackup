@@ -1,0 +1,8 @@
+backup:
+  method: "RSYNC"
+  prefix: "user@host.domain.com:path/to/backups"
+  retain: 8
+
+restore:
+  method: "RSYNC"
+  prefix: "user@host.domain.com:path/to/backups"

@@ -1,0 +1,8 @@
+backup:
+  method: "SCP"
+  prefix: "user@host.domain.com:path/to/backups"
+  retain: 8
+
+restore:
+  method: "SCP"
+  prefix: "user@host.domain.com:path/to/backups"
