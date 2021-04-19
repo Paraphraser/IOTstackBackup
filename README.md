@@ -58,13 +58,18 @@ If you are running `nextcloud` or any container type which is not *copy-safe*, i
 	- [about InfluxDB backup and restore commands](#aboutInfluxCommands)
 	- [about InfluxDB database restoration](#aboutInfluxRestore)
 	- [using cron to run iotstack\_backup](#usingcron)
+	- [periodic maintenance](#periodicMaintenance)
 
 ## <a name="setup"> setup </a>
 
 ### <a name="downloadRepository"> Download repository </a>
 
+Strictly speaking, this repository can be cloned anywhere on your Raspberry Pi. However, I recommend the `~/.local` directory:
+
 ```
-$ git clone https://github.com/Paraphraser/IOTstackBackup.git ~/IOTstackBackup
+$ mkdir -p ~/.local
+$ cd ~/.local
+$ git clone https://github.com/Paraphraser/IOTstackBackup.git IOTstackBackup
 ```
 
 ### <a name="installScripts"> Install scripts </a>
@@ -72,7 +77,7 @@ $ git clone https://github.com/Paraphraser/IOTstackBackup.git ~/IOTstackBackup
 Run the following commands:
 
 ```
-$ cd ~/IOTstackBackup
+$ cd ~/.local/IOTstackBackup
 $ ./install_scripts.sh
 ```
 
@@ -199,7 +204,7 @@ To repeat: `retain` only affects what is retained on the Raspberry Pi.
 You can install a template [configuration file](#configFile) for *scp* like this:
 
 ```
-$ cd ~/IOTstackBackup/configuration-templates
+$ cd ~/.local/IOTstackBackup/configuration-templates
 $ ./install_template.sh SCP
 ``` 
 
@@ -267,7 +272,7 @@ The `~/IOStack/backup` directory is trimmed at the end of each backup run. The t
 You can install a template [configuration file](#configFile) for *rsync* like this:
 
 ```
-$ cd ~/IOTstackBackup/configuration-templates
+$ cd ~/.local/IOTstackBackup/configuration-templates
 $ ./install_template.sh RSYNC
 ``` 
 
@@ -296,7 +301,7 @@ Selecting *rclone* unleashes the power of that package. However, this guide only
 You can install a template [configuration file](#configFile) for *rclone* like this:
 
 ```
-$ cd ~/IOTstackBackup/configuration-templates
+$ cd ~/.local/IOTstackBackup/configuration-templates
 $ ./install_template.sh RCLONE
 ``` 
 
@@ -783,8 +788,10 @@ Scenario. Your SD card wears out, or your Raspberry Pi emits magic smoke, or you
 6. Clone the [Paraphraser/IOTstackBackup](https://github.com/https://github.com/Paraphraser/IOTstackBackup) repository and install the scripts:
 
 	```
-	$ git clone https://github.com/Paraphraser/IOTstackBackup.git ~/IOTstackBackup
-	$ cd ~/IOTstackBackup
+	$ mkdir -p ~/.local
+	$ cd ~/.local
+	$ git clone https://github.com/Paraphraser/IOTstackBackup.git IOTstackBackup
+	$ cd IOTstackBackup
 	$ ./install_scripts.sh
 	```
 
@@ -905,3 +912,13 @@ I do it like this.
 If everything works as expected, `~/Logs/iotstack_backup.log` will be empty. The actual log is written to *yyyy-mm-dd_hhmm.backup-log.txt* inside `~/IOTstack/backups`.
 
 When things don't go as expected (eg a permissions issue), the information you will need for debugging will turn up in `~/Logs/iotstack_backup.log` and you may also find a "You have new mail" message on your next login.
+
+### <a name="periodicMaintenance"> periodic maintenance </a>
+
+From time to time, you should synchronise your local copy of the IOTstackBackup repository by synchronising it with GitHub and then reinstall the scripts:
+
+```
+$ cd ~/.local/IOTstackBackup
+$ git pull
+$ ./install_scripts.sh
+```
