@@ -320,36 +320,75 @@ Field definitions:
 
 ##### Connecting *rclone* to Dropbox
 
-To establish a connection with Dropbox, you must satisfy *rclone's* requirements. You will need a computer where:
+To synchronise directories on your Raspberry Pi with Dropbox, you need to authorise *rclone* to connect to your Dropbox account. The computer where you do this is called the "authorising computer". The *authorising computer* can be any system (Linux, Mac, PC) where:
 
 * *rclone* is installed; **and**
 * a web browser is available.
 
-The computer meeting those requirements can be your Raspberry Pi or another machine like a Mac or PC. If you decide to do this work:
+The *authorising computer* **can** be your Raspberry Pi, providing it meets those two requirements. To be clear, you can not do this step via *ssh*. The work must be done via VNC or an HDMI screen and keyboard.
 
-* on your Raspberry Pi, then you **must** be able to connect to your Raspberry Pi via a Graphical User Interface (GUI) like VNC or an HDMI screen and keyboard. You can't perform the critical step of obtaining a Dropbox token via *ssh*. This is not about how you *normally* connect to your Raspberry Pi. The issue is whether it is *possible* for you to connect to your Raspberry Pi via a GUI for the critical step.
-* on another machine like a Mac or PC, then that other machine should be running the same, (or reasonably close) version of *rclone* as is installed on your Raspberry Pi. You should check both systems with:
+If the *authorising computer* is another computer then it should be running the same (or reasonably close) version of *rclone* as your Raspberry Pi. You should check both systems with:
 
+```
+$ rclone version
+```
+	
+and perform any necessary software updates before you begin.
+
+###### on the *authorising computer*
+
+1. Open a Terminal window and run the command:
+	
 	```
-	$ rclone version
+	$ rclone authorize "dropbox"
 	```
+		
+2. *rclone* will do two things:
 
-###### steps common to both approaches
+	- display the following message:
+	
+		```
+		If your browser doesn't open automatically go to the following link:
+		    http://127.0.0.1:nnnnn/auth?state=xxxxxxxx
+		Log in and authorize rclone for access
+		Waiting for code...
+		```
+		
+	- attempt to open your default browser using URL in the above message. In fact, everything may happen so quickly that you might not actually see the message because it will be covered by the browser window. If, however, a browser window does not open:
+		
+		- copy the URL to the clipboard;
+		- launch a web browser yourself; and
+		- paste the URL into the web browser
 
-1. Open a Terminal session on your Raspberry Pi. If you connect:
+		Note:
+		
+		* you can't paste that URL on another machine. Don't waste time trying to replace "127.0.0.1" with a domain name or IP address of another computer. It will not work!
+	
+3. The browser will take you to Dropbox. Follow the on-screen instructions. If all goes well, you will see a message saying "Success".
 
-	* via GUI, launch the Terminal app.
-	* via *ssh* you will already be in a Terminal session.
+4. Close (or hide or minimise) the browser window so that you can see the Terminal window again.
 
-2. Type the command:
+5. Back in the Terminal window, *rclone* will display output similar to the following:
+	
+	```
+	Paste the following into your remote machine --->
+	{"access_token":"gIbBeRiSh","token_type":"bearer","refresh_token":"gIbBeRiSh","expiry":"timestamp"}
+	<---End paste
+	```
+	
+6. Copy the JSON string (everything from and including the "{" up to and including the "}" and save it somewhere. This string is your "Dropbox Token".
+
+###### on the Raspberry Pi
+
+1. Open a Terminal window and run the command:
 
 	```
 	$ rclone config
 	```
 
-3. Choose "n" for "New remote"
-4. Give the remote the name "dropbox" (lower-case recommended). Press return.
-5. Find "Dropbox" in the list of storage types. At the time of writing it was:
+2. Choose "n" for "New remote".
+3. Give the remote the name "dropbox" (lower-case recommended). Press return.
+4. Find "Dropbox" in the list of storage types. At the time of writing it was:
 
 	```
 	10 / Dropbox
@@ -358,100 +397,41 @@ The computer meeting those requirements can be your Raspberry Pi or another mach
 
 	Respond to the `Storage>` prompt with the number associated with "Dropbox" ("10" in this example) and press return.
 
-6. Respond to the `client_id>` prompt by pressing return.
+5. Respond to the `client_id>` prompt by pressing return (ie leave it empty).
 
-7. Respond to the `client_secret>` prompt by pressing return.
+6. Respond to the `client_secret>` prompt by pressing return (ie leave it empty).
 
-8. Respond to the `Edit advanced config?` prompt by pressing return to accept the default "No" answer.
-9. What you do next depends on how you are connected to your Raspberry Pi.
-
-###### *if you are connected via GUI …*
-
-* Respond to the `Use auto config?` prompt by pressing return to accept the default "Yes". *rclone* will show you a URL in the following pattern:
-
+7. Respond to the `Edit advanced config?` prompt by pressing return to accept the default "No" answer.
+8. Respond to the `Use auto config?` prompt by typing "n" and pressing return.
+9. *rclone* will display the following instructions and then wait for a response:
+	
 	```
-	http://127.0.0.1:nnnnn/auth?state=xxxxxxxx
-	```
-
-	*rclone* will also attempt to open a web browser. If a web browser does not open automatically, you can:
-
-	* copy the URL to the clipboard;
-	* launch a web browser on the **same** Raspberry Pi; and
-	* paste the URL
-
-	Note:
+	Execute the following on the machine with the web browser (same rclone version recommended):
 	
-	* You can't paste that URL on another machine. Don't waste time trying to replace "127.0.0.1" with the domain name or IP address of your Raspberry Pi and then pasting the URL into a browser on another computer. It will not work!
-
-* The browser will take you to Dropbox. Follow the on-screen instructions.
-* Dropbox will generate the required token and *rclone* will install it in its configuration on your Raspberry Pi.
-
-###### *if you are not connected via GUI …*
-
-* on the Raspberry Pi …
-
-	* Respond to the `Use auto config?` prompt by typing "n" and pressing return.
-	* *rclone* will display the following instructions and then wait for a response:
-	
-		```
-		Execute the following on the machine with the web browser (same rclone version recommended):
-		
-			rclone authorize "dropbox"
-		
-		Then paste the result below:
-		result>
-		```
-	
-* on the GUI-capable computer where *rclone* is installed …
-	
-	* Run the following command in a Terminal window:
-	
-		```
 		rclone authorize "dropbox"
-		```
-	* *rclone* will display the following message:
 	
-		```
-		If your browser doesn't open automatically go to the following link: http://127.0.0.1:nnnnn/auth?state=xxxxxxxx
-		Log in and authorize rclone for access
-		Waiting for code...
-		```
-		
-		*rclone* will also attempt to open your default browser using the above URL. In fact, everything may happen so quickly that you might not actually see the above instructions. If, however, a browser window does not open:
-		
-		- copy the URL to the clipboard;
-		- launch a web browser yourself; and
-		- paste the URL into the web browser
+	Then paste the result below:
+	result>
+	```
 	
-	* The browser will take you to Dropbox. Follow the on-screen instructions.
-	* Dropbox will generate the required token.
-	* Back in the Terminal window, *rclone* will display output similar to the following:
+10. Paste your "Dropbox Token" (saved as the last step taken on your *authorising computer*) and press return.
+
+11. Respond to the `Yes this is OK` prompt by pressing return to accept the default "y" answer.
+12. Press "q" and return to "Quit config".
+13. Check your work:
+
+	```
+	$ rclone listremotes
+	```
+
+	The expected answer is:
 	
-		```
-		Paste the following into your remote machine --->
-		{"access_token":"gibberish","token_type":"bearer","refresh_token":"gibberish","expiry":"timestamp"}
-		<---End paste
-		```
+	```
+	dropbox:
+	```
 	
-	* Copy the JSON string (everything from and including the "{" up to and including the "}" to the clipboard.
-
-* on the Raspberry Pi …
-
-	* The Raspberry Pi is still waiting at the following prompt:
+	where "dropbox" is the name you gave to the remote.
 	
-		```
-		result>
-		```
-	
-	* Paste the JSON response and press return.
-
-###### the remaining steps are common to both approaches
-
-* Respond to the remaining *rclone* prompts. Typically, these will be:
-
-	- Press return to accept the default "Yes" answer; and
-	- Type "q" and press return to exit `rclone config`.
-
 ##### about your Dropbox token
 
 The Dropbox token is stored in the `rclone` configuration file at:
@@ -461,12 +441,12 @@ The Dropbox token is stored in the `rclone` configuration file at:
 ```
 
 The token is tied to both `rclone` (the application) and your Dropbox account but it is not tied to a specific machine. You can copy the `rclone.conf` to other computers.
-
+	
 ##### test your Dropbox connection
 
 You should test connectivity like this:
 
-1. Replace the right hand side with your actual values and execute the command:
+1. Replace the right hand side of the following with your actual values and then execute the command:
 
 	```
 	$ PREFIX="dropbox:path/to/backups"
@@ -490,14 +470,6 @@ You should test connectivity like this:
 	If the command displays an error, you may need to check your work.
 
 Once you are sure your working PREFIX is correct, copy the values to the [configuration file](#configFile).
-
-##### if all else fails …
-
-If you make a complete mess of things, you can always return *rclone* to a "clean slate" by erasing its configuration file at:
-
-```
-~/.config/rclone/rclone.conf
-```
 
 #### <a name="mixnmatch"> mix and match </a>
 
@@ -920,7 +892,7 @@ I do it like this.
 	```
 	SHELL=/bin/bash
 	HOME=/home/pi
-	PATH=/home/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+	PATH=/home/pi/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 	```
 	
 3. crontab entry:
