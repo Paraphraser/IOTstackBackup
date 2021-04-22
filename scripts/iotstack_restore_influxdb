@@ -76,7 +76,7 @@ fi
 [ $(stat -c "%a" "$INFLUXBACKUP") = "755" ] || sudo chmod -R 755 "$INFLUXBACKUP"
 
 # now we can begin
-echo "----- Starting iotstack_restore_influxdb at $(date) -----"
+echo "----- Starting $SCRIPT at $(date) -----"
 
 # the influx backup directory needs to be empty
 if [ $(ls -1 "$INFLUXBACKUPDB" | wc -l) -gt 0 ] ; then
@@ -113,5 +113,5 @@ echo "deactivating influxdb"
 docker-compose -f "$COMPOSE" stop influxdb
 docker-compose -f "$COMPOSE" rm -f influxdb
 
-echo "----- Finished iotstack_restore_influxdb at $(date) -----"
+echo "----- Finished $SCRIPT at $(date) -----"
 

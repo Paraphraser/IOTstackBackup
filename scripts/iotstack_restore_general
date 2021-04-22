@@ -62,7 +62,7 @@ if [ $(docker ps | wc -l) -gt 1 ] ; then
 
 fi
 
-echo "----- Starting iotstack_restore_general at $(date) -----"
+echo "----- Starting $SCRIPT at $(date) -----"
 
 # make a temporary directory to unpack into
 RESTOREDIR=$(mktemp -d -p "$IOTSTACK")
@@ -131,4 +131,4 @@ fi
 echo "Cleaning up"
 rm -rf "$RESTOREDIR"
 
-echo "----- Finished iotstack_restore_general at $(date) -----"
+echo "----- Finished $SCRIPT at $(date) -----"

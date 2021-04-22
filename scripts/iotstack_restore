@@ -19,6 +19,7 @@ case "$#" in
        echo "Error: by_host_dir can't be derived from the runtag."
        echo "       Try passing a second argument."
        USAGE=1
+    fi
     ;;
 
   2 )
@@ -96,7 +97,7 @@ case "$CLOUD_METHOD" in
     ;;
 
   "RSYNC" | "SCP" )
-    scp "$CLOUD_PATH".* "$RESTOREDIR"
+    scp "$CLOUD_PATH/$RUNTAG".* "$RESTOREDIR"
     ;;
 
   * )
