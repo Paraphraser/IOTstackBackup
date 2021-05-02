@@ -40,8 +40,6 @@ fi
 
 # assumptions
 IOTSTACK="$HOME/IOTstack"
-COMPOSENAME="docker-compose.yml"
-COMPOSE="$IOTSTACK/$COMPOSENAME"
 SERVICESNAME="services"
 SERVICESROOT="$IOTSTACK/$SERVICESNAME"
 VOLUMESNAME="volumes"
@@ -70,7 +68,6 @@ RESTOREDIR=$(mktemp -d -p "$IOTSTACK")
 # define restored structures in terms of that
 SERVICESRESTOREDIR="$RESTOREDIR/$SERVICESNAME"
 VOLUMESRESTOREDIR="$RESTOREDIR/$VOLUMESNAME"
-COMPOSERESTORE="$RESTOREDIR/$COMPOSENAME"
 
 # unpack the general backup into that directory
 echo "unpacking $RESTORE_TAR_GZ"
@@ -98,35 +95,53 @@ if [ -d "$VOLUMESRESTOREDIR" ] ; then
 
 fi
 
-# was a "docker-compose.yml" file restored?
-if [ -e "$COMPOSERESTORE" ] ; then
+# iterate the docker-compose prefixes (prefixes used for consistency with backup script)
+for COMPOSEPREFIX in "docker-compose" "docker-compose-override" "compose-override" ; do
 
-   # yes! does a compose file exist?
-   if [ -e "$COMPOSE" ] ; then
+   # append the extension to the prefix
+   COMPOSENAME="$COMPOSEPREFIX.yml"
 
-      # yes! compare restored with in-situ
-      cmp "$COMPOSERESTORE" "$COMPOSE"
+   # source file in the backup is
+   SOURCE="$RESTOREDIR/$COMPOSENAME"
 
-      # compare same?
-      if [ $? -ne 0 ] ; then
+   # the target is
+   TARGET="$IOTSTACK/$COMPOSENAME"
 
-          # no! leave in-situ alone but move the restored version
-          # into place with a tag
-          TAGGEDCOMPOSE="$COMPOSE".$(date +"%Y-%m-%d_%H%M")
-          echo "Restoring $COMPOSENAME as $TAGGEDCOMPOSE"
-          mv "$COMPOSERESTORE" "$TAGGEDCOMPOSE"
+   # was that file included in the restore?
+   if [ -e "$SOURCE" ] ; then
+
+      # yes! does the target already exist?
+      if [ -e "$TARGET" ] ; then
+
+         # yes! compare restored with in-situ
+         cmp "$SOURCE" "$TARGET"
+
+         # compare same?
+         if [ $? -ne 0 ] ; then
+
+             # no! leave in-situ alone but move the restored version
+             # into place with a tag
+             TARGET="$TARGET".$(date +"%Y-%m-%d_%H%M")
+             echo "Restoring $COMPOSENAME as $TARGET"
+             mv "$SOURCE" "$TARGET"
+
+         else
+
+             echo "$COMPOSENAME already exists and compares same - skipped"
+
+         fi
+
+      else
+
+         # no! move the restored version into place
+         echo "Restoring $COMPOSENAME"
+         mv "$SOURCE" "$TARGET"
 
       fi
 
-   else
-
-      # no! move the restored version into place
-      echo "Restoring $COMPOSENAME"
-      mv "$COMPOSERESTORE" "$COMPOSE"
-
    fi
 
-fi
+done
 
 echo "Cleaning up"
 rm -rf "$RESTOREDIR"

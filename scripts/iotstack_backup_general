@@ -40,8 +40,7 @@ fi
 
 # assumptions
 IOTSTACK="$HOME/IOTstack"
-COMPOSEPREFIX="docker-compose"
-COMPOSE="$IOTSTACK/$COMPOSEPREFIX.yml"
+COMPOSE="$IOTSTACK/docker-compose.yml"
 
 # check the key assumptions
 if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
@@ -52,7 +51,7 @@ if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
    exit -1
 fi
 
-# define files/folders to be included in the backup
+# define mandatory files/folders to be included in the backup
 # (note - temporary file created in RAM)
 BACKUP_INCLUDE="$(mktemp -p /dev/shm/)"
 cat <<-INCLUSIONS >"$BACKUP_INCLUDE"
@@ -70,8 +69,12 @@ for INCLUDE in $(cat $BACKUP_INCLUDE); do
 done
 
 # add all docker-compose files in directory-relative form
-for INCLUDE in "$IOTSTACK/$COMPOSEPREFIX".* ; do
-   echo "."/$(basename "$INCLUDE") >> "$BACKUP_INCLUDE"
+for COMPOSEPREFIX in "docker-compose" "docker-compose-override" "compose-override" ; do
+   for INCLUDE in "$IOTSTACK/$COMPOSEPREFIX.yml"* ; do
+      if [ -e "$INCLUDE" ] ; then
+         echo "."/$(basename "$INCLUDE") >> "$BACKUP_INCLUDE"
+      fi
+   done
 done
 
 # define files/folders to be excluded from the backup
@@ -89,6 +92,12 @@ echo "----- Starting $SCRIPT at $(date) -----"
 
 # create the file (sets ownership correctly)
 touch "$BACKUP_TAR_GZ"
+
+# add information to the report
+echo "Paths included in the backup:"
+cat "$BACKUP_INCLUDE"
+echo "Paths excluded from the backup:"
+cat "$BACKUP_EXCLUDE"
 
 # perform the backup (relative to ~/IOTstack)
 sudo tar \

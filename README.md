@@ -547,9 +547,15 @@ iotstack_backup_general path/to/backupdir runtag {general-backup.tar.gz}
 	with *general-backup.tar.gz* being replaced if you supply a third argument.
 
 * The resulting `.tar.gz` file will contain:
-	* All files matching the pattern `~/IOTstack/docker-compose.*`
+	* All files matching the patterns:
+
+		* `~/IOTstack/docker-compose.yml*`
+		* `~/IOTstack/docker-compose-override.yml*`
+		* `~/IOTstack/compose-override.yml*`
+
 	* everything in `~/IOTstack/services`
 	* everything in `~/IOTstack/volumes`, except:
+
 		* `~/IOTstack/volumes/influxdb`
 		* `~/IOTstack/volumes/nextcloud`
 		* `~/IOTstack/volumes/postgres`<sup>†</sup>
@@ -667,12 +673,27 @@ iotstack_restore_general path/to/backupdir runtag {general-backup.tar.gz}
 
 	† if you removed the `postgres` exclusion from `iotstack_backup_general` then the postgres directory will be restored in as-backed-up state.
 	
-`docker-compose.yml` is given special handling. This is to cater for two distinct situations:
+The following files are given special handling:
 
-* On a bare-metal restore, `docker-compose.yml` will **not** be present in `~/IOTstack`. The `docker-compose.yml` from the backup will be restored from *path_to.tar.gz*.
-* If `docker-compose.yml` is already present in `~/IOTstack` then it may be the same as the backup or contain customisations that should not be overwritten. The restore compares `docker-compose.yml` in `~/IOTstack` with `docker-compose.yml` from *path_to.tar.gz*:
+* `docker-compose.yml`
+* `docker-compose-override.yml`
+* `compose-override.yml`
+
+This is to cater for two distinct situations:
+
+* On a bare-metal restore, `~/IOTstack` will not contain any `.yml` file(s) so anything in the backup will be restored.
+* If a `.yml` is already present in `~/IOTstack` then it may be the same as the backup or contain customisations that should not be overwritten. The restore compares the file in `~/IOTstack` with the one in *path_to.tar.gz*:
 	* If the two files compare the same then nothing happens.
-	* If the two files do not compare the same, `docker-compose.yml` from *path_to.tar.gz* will be restored into `~/IOTstack` with a date-time suffix. If you want to use the `docker-compose.yml` that was restored from the backup, you have to move it into place by hand.
+	* If the two files do not compare the same, the `.yml` from *path_to.tar.gz* will be moved into `~/IOTstack` with a date-time suffix. If you want to use a `.yml` that has a date-time suffix, you have to rename it by hand.
+* Note: `iotstack_backup_general` treats compose file names as *prefixes* and includes anything that matches those prefixes. For example:
+
+	- `docker-compose.yml*`
+
+	will match:
+	
+	- `docker-compose.yml.2021-05-02_1150`
+
+	However, `iotstack_restore_general` does **not** restore any tagged compose files that are present in a backup. If you want them, you will have to unpack the backup yourself.
 
 The reason for implementing the "general" restore as a standalone script is to make it easier to manage snapshots and/or build your own backup strategy.
 
