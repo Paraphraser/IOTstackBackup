@@ -76,22 +76,38 @@ sudo tar -x --same-owner -z -f "$RESTORE_TAR_GZ" -C "$RESTOREDIR"
 # was a "services" directory restored?
 if [ -d "$SERVICESRESTOREDIR" ] ; then
 
-   echo "removing old $SERVICESNAME directory"
-   rm -rf "$SERVICESROOT"
+   # iterate its contents
+   for SPATH in "$SERVICESRESTOREDIR"/* ; do
 
-   echo "moving restored $SERVICESNAME into place"
-   mv "$SERVICESRESTOREDIR" "$SERVICESROOT"
+      SNAME=$(basename "$SPATH")
+      DPATH="$SERVICESROOT/$SNAME"
+
+      echo "removing old $DPATH"
+      sudo rm -rf  "$DPATH"
+
+      echo "moving restored $SNAME into place"
+      sudo mv "$SPATH" "$DPATH"
+
+   done
 
 fi
 
 # was a "volumes" directory restored?
 if [ -d "$VOLUMESRESTOREDIR" ] ; then
 
-   echo "removing old $VOLUMESNAME directory"
-   sudo rm -rf "$VOLUMESROOT"
+   # iterate its contents
+   for SPATH in "$VOLUMESRESTOREDIR"/* ; do
 
-   echo "moving restored $VOLUMESNAME into place"
-   sudo mv "$VOLUMESRESTOREDIR" "$VOLUMESROOT"
+      SNAME=$(basename "$SPATH")
+      DPATH="$VOLUMESROOT/$SNAME"
+
+      echo "removing old $DPATH"
+      sudo rm -rf  "$DPATH"
+
+      echo "moving restored $SNAME into place"
+      sudo mv "$SPATH" "$DPATH"
+
+   done
 
 fi
 

@@ -85,6 +85,7 @@ cat <<-EXCLUSIONS >"$BACKUP_EXCLUDE"
 ./volumes/nextcloud/*
 ./volumes/postgres/*
 ./volumes/pihole.restored
+./volumes/lost+found
 EXCLUSIONS
 
 # now we can begin
