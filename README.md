@@ -796,7 +796,7 @@ Scenario. Your SD card wears out, or your Raspberry Pi emits magic smoke, or you
 4. Mimic how the menu installs Docker and Docker-Compose (the following is a superset of old- and new-menu):
 
 	```	
-	$ sudo bash -c '[ $(egrep -c "^allowinterfaces eth0,wlan0" /etc/dhcpcd.conf) -eq 0 ] && echo "allowinterfaces eth0,wlan0" >> /etc/dhcpcd.conf'
+	$ sudo bash -c '[ $(egrep -c "^allowinterfaces eth*,wlan*" /etc/dhcpcd.conf) -eq 0 ] && echo "allowinterfaces eth*,wlan*" >> /etc/dhcpcd.conf'
 	$ curl -fsSL https://get.docker.com | sh
 	$ sudo usermod -G docker -a $USER
 	$ sudo usermod -G bluetooth -a $USER
