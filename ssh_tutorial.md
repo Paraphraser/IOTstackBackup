@@ -245,7 +245,7 @@ Security professionals like to tell you that a private key should never leave th
 
 On some implementations, the information in `known_hosts` is hashed to make it unreadable. This is the case on the Raspberry Pi.
 
-Suppose you rebuild tri-dev starting from a clean copy of Raspbian. On first boot, the operating system will generate new host keys (the equivalent of `ssh-keygen` to generate user key-pairs). Those are stored in `~/etc/ssh`.
+Suppose you rebuild tri-dev starting from a clean copy of Raspbian. On first boot, the operating system will generate new host keys (the host equivalent of `ssh-keygen` to generate user key-pairs). Those are stored in `/etc/ssh`.
 
 When you try logging-in from sec-dev, you'll get a warning about how some other computer might be trying to impersonate the computer you are actually trying to reach. What the warning **actually** means is that the entry for tri-dev in your `known_hosts` file on sec-dev doesn't match the keys that were generated when tri-dev was rebuilt.
 
