@@ -76,7 +76,10 @@ sudo tar -x --same-owner -z -f "$RESTORE_TAR_GZ" -C "$RESTOREDIR"
 # was a "services" directory restored?
 if [ -d "$SERVICESRESTOREDIR" ] ; then
 
-   # iterate its contents
+   # make sure the services root exists
+   mkdir -p "$SERVICESROOT"
+
+   # iterate the restored contents
    for SPATH in "$SERVICESRESTOREDIR"/* ; do
 
       SNAME=$(basename "$SPATH")
@@ -95,7 +98,10 @@ fi
 # was a "volumes" directory restored?
 if [ -d "$VOLUMESRESTOREDIR" ] ; then
 
-   # iterate its contents
+   # make sure the volumes root exists
+   sudo mkdir -p "$VOLUMESROOT"
+
+   # iterate the restored contents
    for SPATH in "$VOLUMESRESTOREDIR"/* ; do
 
       SNAME=$(basename "$SPATH")
