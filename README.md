@@ -21,7 +21,7 @@ In particular, these scripts will never be guaranteed to cover the full gamut of
 
 The scripts *should* work "as is" with any container type that can be backed-up safely by copying the contents of its `volumes` directory _while the container is running_. I call this the ***copy-safe*** property.
 
-Databases (other than SQLite) are the main exception. Like the official backup script upon which it is based, `iotstack_backup` handles `InfluxDB` properly, omits `nextcloud` entirely, and completely ignores the problem for any container which is not *copy-safe* (eg PostgreSQL).
+Databases (other than SQLite) are the main exception. Like the official backup script upon which it is based, `iotstack_backup` handles `InfluxDB` properly, omits `nextcloud`, `postgres` and `mariadb` entirely, and completely ignores the problem for any container which is not *copy-safe*.
 
 When I first developed these scripts, there was no equivalent for `iotstack_restore` in [SensorsIot/IOTstack](https://github.com/SensorsIot/IOTstack). That was a gap I wanted to rectify. Running my `iotstack_restore` replaces the contents of the `services` and `volumes` directories, then restores the `InfluxDB` databases properly. Fairly obviously, `nextcloud` will be absent but any other non-*copy-safe* container may well be in a damaged state.
 
@@ -557,11 +557,12 @@ iotstack_backup_general path/to/backupdir runtag {general-backup.tar.gz}
 	* everything in `~/IOTstack/volumes`, except:
 
 		* `~/IOTstack/volumes/influxdb`
+		* `~/IOTstack/volumes/mariadb`<sup>†</sup>
 		* `~/IOTstack/volumes/nextcloud`
-		* `~/IOTstack/volumes/postgres`<sup>†</sup>
 		* `~/IOTstack/volumes/pihole.restored `
+		* `~/IOTstack/volumes/postgres`<sup>†</sup>
 
-	† *postgres* is omitted because it is not copy-safe but there is, as yet, no script to backup PostGres like there is for InfluxDB. If you run PostGres and you want to take the risk, just remove the exclusion from the script.
+	† omitted because it is not copy-safe but there are, as yet, no scripts to backup these databases like there is for InfluxDB. If you run these and you want to take the risk, just remove the exclusion from the script.
 
 The reason for implementing this as a standalone script is to make it easier to take snapshots and/or build your own backup strategy.
 
@@ -663,15 +664,19 @@ iotstack_restore_general path/to/backupdir runtag {general-backup.tar.gz}
 	
 * In both cases, *general-backup.tar.gz* (or whatever filename you supply)  is expected to be a file created by `iotstack_backup_general`. The result is undefined if this expectation is not satisfied.
 * Running `iotstack_restore_general` will restore:
+
 	* everything in `~/IOTstack/services`
 	* everything in `~/IOTstack/volumes`, except:
+
 		* `~/IOTstack/volumes/influxdb`
+		* `~/IOTstack/volumes/mariadb`<sup>†</sup>
 		* `~/IOTstack/volumes/nextcloud`
-		* `~/IOTstack/volumes/postgres`<sup>†</sup>
 		* `~/IOTstack/volumes/pihole.restored `
+		* `~/IOTstack/volumes/postgres`<sup>†</sup>
+
 	* `~/IOTstack/docker-compose.yml` in some situations.
 
-	† if you removed the `postgres` exclusion from `iotstack_backup_general` then the postgres directory will be restored in as-backed-up state.
+	† if you removed the matching exclusion from `iotstack_backup_general` then these directories will be restored in as-backed-up state.
 	
 The following files are given special handling:
 

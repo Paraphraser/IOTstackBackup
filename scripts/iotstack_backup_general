@@ -82,6 +82,7 @@ done
 BACKUP_EXCLUDE="$(mktemp -p /dev/shm/)"
 cat <<-EXCLUSIONS >"$BACKUP_EXCLUDE"
 ./volumes/influxdb/*
+./volumes/mariadb/*
 ./volumes/nextcloud/*
 ./volumes/postgres/*
 ./volumes/pihole.restored
