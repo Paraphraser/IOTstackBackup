@@ -962,33 +962,35 @@ If you are unsure about how to set up a `crontab`:
 	no crontab for pi
 	```
 
-2. If you have an existing `crontab`, you can either:
+2. Irrespective of whether you have an existing `crontab` or not, you can:
 
-	* Edit your `crontab` in-situ via this command:
+	* ***Either*** – edit your `crontab` in-situ via this command:
 	
 		```
 		$ crontab -e
 		```
 	
- 		This will either use the value of your `EDITOR` environment variable (if you have set it) or offer choice of editors.
+ 		This will use the value of your `EDITOR` environment variable (if you have set it) or offer choice of editors. It will initialise a new `crontab` if you did not have one before.
  		
- 	* Prepare your `crontab` as a separate file (eg "my-crontab.txt") and import it:
+ 	* ***Or*** – prepare your `crontab` as a separate file (eg "my-crontab.txt") and import it:
 
 		```
 		$ crontab my-crontab.txt
 		```
-		
-3. Combine the two methods. First, export your existing `crontab`:
-
-	```
-	$ crontab -l >my-crontab.txt
-	```
 	
-	Edit the "my-crontab.txt" file, and finish by re-importing the edited file:
+		This method always replaces any existing `crontab`.
 	
-	```
-	$ crontab my-crontab.txt
-	```
+	* ***Or*** – combine the two methods. First, if you have an existing `crontab`, export it to a file:
+	
+		```
+		$ crontab -l >my-crontab.txt
+		```
+			
+		Edit the "my-crontab.txt" file, and finish by re-importing the edited file:
+			
+		```
+		$ crontab my-crontab.txt
+		```
 
 If everything works as expected, `~/Logs/iotstack_backup.log` will be empty. The actual log is written to *yyyy-mm-dd_hhmm.backup-log.txt* inside `~/IOTstack/backups`.
 
