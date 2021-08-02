@@ -392,7 +392,7 @@ and perform any necessary software updates before you begin.
 	```
 
 2. Choose "n" for "New remote".
-3. Give the remote the name "dropbox" (lower-case recommended). Press return.
+3. Give the remote the name "dropbox" (lower-case recommended). Press <kbd>return</kbd>.
 4. Find "Dropbox" in the list of storage types. At the time of writing it was:
 
 	```
@@ -400,14 +400,14 @@ and perform any necessary software updates before you begin.
 	   \ "dropbox"
 	```
 
-	Respond to the `Storage>` prompt with the number associated with "Dropbox" ("10" in this example) and press return.
+	Respond to the `Storage>` prompt with the number associated with "Dropbox" ("10" in this example) and press <kbd>return</kbd>.
 
-5. Respond to the `client_id>` prompt by pressing return (ie leave it empty).
+5. Respond to the `client_id>` prompt by pressing <kbd>return</kbd> (ie leave it empty).
 
-6. Respond to the `client_secret>` prompt by pressing return (ie leave it empty).
+6. Respond to the `client_secret>` prompt by pressing <kbd>return</kbd> (ie leave it empty).
 
-7. Respond to the `Edit advanced config?` prompt by pressing return to accept the default "No" answer.
-8. Respond to the `Use auto config?` prompt by typing "n" and pressing return.
+7. Respond to the `Edit advanced config?` prompt by pressing <kbd>return</kbd> to accept the default "No" answer.
+8. Respond to the `Use auto config?` prompt by typing "n" and pressing <kbd>return</kbd>.
 9. *rclone* will display the following instructions and then wait for a response:
 	
 	```
@@ -419,10 +419,10 @@ and perform any necessary software updates before you begin.
 	result>
 	```
 	
-10. Paste your "Dropbox Token" (saved as the last step taken on your *authorising computer*) and press return.
+10. Paste your "Dropbox Token" (saved as the last step taken on your *authorising computer*) and press <kbd>return</kbd>.
 
-11. Respond to the `Yes this is OK` prompt by pressing return to accept the default "y" answer.
-12. Press "q" and return to "Quit config".
+11. Respond to the `Yes this is OK` prompt by pressing <kbd>return</kbd> to accept the default "y" answer.
+12. Press <kbd>q</kbd> and <kbd>return</kbd> to "Quit config".
 13. Check your work:
 
 	```
@@ -933,6 +933,61 @@ I do it like this.
 	```
 	# backup Docker containers and configurations once per day at 11:00am
 	00	11	*	*	*	iotstack_backup >>./Logs/iotstack_backup.log 2>&1
+	```
+	
+	See [crontab.guru](https://crontab.guru/#00_11_*_*_*) if you want to understand the syntax of the last line.
+	
+The completed `crontab` would look like this:
+
+```
+SHELL=/bin/bash
+HOME=/home/pi
+PATH=/home/pi/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# backup Docker containers and configurations once per day at 11:00am
+00	11	*	*	*	iotstack_backup >>./Logs/iotstack_backup.log 2>&1
+```
+
+If you are unsure about how to set up a `crontab`:
+
+1. First check whether you have an existing `crontab` by:
+
+	```
+	$ crontab -l
+	```
+	
+	The command will either display your `crontab` or report:
+	
+	```
+	no crontab for pi
+	```
+
+2. If you have an existing `crontab`, you can either:
+
+	* Edit your `crontab` in-situ via this command:
+	
+		```
+		$ crontab -e
+		```
+	
+ 		This will either use the value of your `EDITOR` environment variable (if you have set it) or offer choice of editors.
+ 		
+ 	* Prepare your `crontab` as a separate file (eg "my-crontab.txt") and import it:
+
+		```
+		$ crontab my-crontab.txt
+		```
+		
+3. Combine the two methods. First, export your existing `crontab`:
+
+	```
+	$ crontab -l >my-crontab.txt
+	```
+	
+	Edit the "my-crontab.txt" file, and finish by re-importing the edited file:
+	
+	```
+	$ crontab my-crontab.txt
 	```
 
 If everything works as expected, `~/Logs/iotstack_backup.log` will be empty. The actual log is written to *yyyy-mm-dd_hhmm.backup-log.txt* inside `~/IOTstack/backups`.
