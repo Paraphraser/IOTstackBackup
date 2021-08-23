@@ -928,6 +928,40 @@ I do it like this.
 	PATH=/home/pi/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 	```
 	
+	The `PATH=` statement above assumes that the `iotstack_backup` and `iotstack_restore` scripts were installed in one of the directories in the colon-separated list on the right hand side of that statement. It is prudent to check that assumption:
+	
+	* Run the following command:
+	
+		```
+		$ which iotstack_backup
+		```
+		
+		You ran this command earlier at [Install scripts](#installScripts) to confirm that the scripts had been installed where Raspberry Pi OS could find them. This time, you should **not** get silence but should, instead, get an answer like:
+		
+		```
+		/home/pi/.local/bin/iotstack_backup
+		```
+		
+	* Copy the entire `PATH` statement to the clipboard, then paste it into your terminal window and run it. For example:
+
+		```
+		$ PATH=/home/pi/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+		```
+
+	* Repeat the same `which` command as above. If you get **silence**, you will need to adjust the `PATH` statement in the crontab preamble so that it includes the directory where `iotstack_backup` and `iotstack_restore` were installed. For example, if the first `which` command returned the answer:
+
+		```
+		/home/pi/bin/iotstack_backup
+		```
+
+		then you will need to add the `/home/pi/bin` installation directory to the top of the `PATH` statement in your crontab, as in:
+		
+		```
+		PATH=/home/pi/bin:/home/pi/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+		```
+
+	* Any time you change your PATH to perform a test (as you did two steps back), it is a good idea to logout and login again to get it back to normal.
+	
 3. crontab entry:
 
 	```
