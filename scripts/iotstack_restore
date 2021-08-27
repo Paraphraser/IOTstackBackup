@@ -110,23 +110,17 @@ esac
 # presume that the stack is not running and does not need restarting
 RESTART="NO"
 
-# is the stack (or any part of it) running?
-if [ $(docker ps | wc -l) -gt 1 ] ; then
+# does the compose file exist?
+if [ -e "$COMPOSE" ] ; then
 
-   # yes! does the compose file exist?
-   if [ -e "$COMPOSE" ] ; then
-   
+   # yes! is IOTstack (or any part of it) running?
+   if [ $(docker-compose -f "$COMPOSE" ps | wc -l) -gt 1 ] ; then
+
       echo "Deactivating the stack"
       docker-compose -f "$COMPOSE" down
 
       # the stack should be re-launched on exit
       RESTART="YES"
-
-   else
-
-      echo "Error: containers seem to be running but $COMPOSE does not exist."
-      echo "       this may produce unpredictable results. Please terminate all"
-      echo "       containers and try again."
 
    fi
 

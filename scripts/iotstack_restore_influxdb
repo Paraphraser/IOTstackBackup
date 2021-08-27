@@ -57,7 +57,7 @@ if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
 fi
 
 # check that influxdb is not running
-if [ $(docker ps | grep "influxdb" | wc -l) -gt 0 ] ; then
+if [ $(docker-compose -f "$COMPOSE" ps | grep "influxdb" | wc -l) -gt 0 ] ; then
 
    echo "Error: The influxdb container should NOT be running at the start of a restore"
    echo "       Please deactivate the influxdb container and try the restore again"

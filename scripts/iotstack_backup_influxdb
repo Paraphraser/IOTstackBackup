@@ -40,12 +40,13 @@ fi
 
 # assumptions
 IOTSTACK="$HOME/IOTstack"
+COMPOSE="$IOTSTACK/docker-compose.yml"
 BACKUPS="$IOTSTACK/backups"
 INFLUXBACKUP="$BACKUPS/influxdb"
 INFLUXBACKUPDB="$INFLUXBACKUP/db"
 
 # is influxdb running?
-if [ $(docker ps | grep -c "influxdb") -eq 0 ]; then
+if [ $(docker-compose -f "$COMPOSE" ps | grep -c "influxdb") -eq 0 ]; then
    echo "Warning: influxdb container not running - backup skipped"
    exit 0
 fi

@@ -40,6 +40,7 @@ fi
 
 # assumptions
 IOTSTACK="$HOME/IOTstack"
+COMPOSE="$IOTSTACK/docker-compose.yml"
 SERVICESNAME="services"
 SERVICESROOT="$IOTSTACK/$SERVICESNAME"
 VOLUMESNAME="volumes"
@@ -51,12 +52,17 @@ if [ ! -d "$IOTSTACK" ] ; then
    exit -1
 fi
 
-# check that the stack is not running
-if [ $(docker ps | wc -l) -gt 1 ] ; then
+# does the compose file exist?
+if [ -e "$COMPOSE" ] ; then
 
-   echo "Error: The stack should NOT be running during a restore"
-   echo "       Please deactivate the stack and try the restore again"
-   exit -1
+   # yes! is IOTstack (or any part of it) running?
+   if [ $(docker-compose -f "$COMPOSE" ps | wc -l) -gt 1 ] ; then
+
+      echo "Error: The stack should NOT be running during a restore"
+      echo "       Please deactivate the stack and try the restore again"
+      exit -1
+
+   fi
 
 fi
 
