@@ -114,7 +114,7 @@ RESTART="NO"
 if [ -e "$COMPOSE" ] ; then
 
    # yes! is IOTstack (or any part of it) running?
-   if [ $(docker-compose -f "$COMPOSE" ps | wc -l) -gt 1 ] ; then
+   if [ $(docker-compose -f "$COMPOSE" ps | wc -l) -gt 2 ] ; then
 
       echo "Deactivating the stack"
       docker-compose -f "$COMPOSE" down
