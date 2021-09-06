@@ -106,6 +106,9 @@ iotstack_backup_general "$BACKUPSDIR" "$RUNTAG"
 # perform the influx backup
 iotstack_backup_influxdb "$BACKUPSDIR" "$RUNTAG"
 
+# perform the nextcloud backup
+iotstack_backup_nextcloud "$BACKUPSDIR" "$RUNTAG"
+
 # copy the files (keep in mind that log entries written after the
 # log is copied to the remote will only be in the local log).
 case "$CLOUD_METHOD" in

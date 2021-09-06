@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+
+echo "Warning: Test script only - use at own risk"
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
+
+# support user renaming of script
+SCRIPT=$(basename "$0")
+
+# the default name and correct extension type is
+DEFAULTFILENAME="nextcloud-backup.tar.gz"
+
+# $1 is required and is either path to a .tar or the path to a folder
+# $2 is optional and is the runtag (yyyy-mm-dd_hhmm.host-name)
+# $3 is optional and overrides the default file name
+
+case "$#" in
+
+  1)
+    BACKUP_TAR_GZ=$(realpath "$1")
+    ;;
+
+  2 | 3)
+    BACKUP_TAR_GZ=$(realpath "$1/$2.${3:-"$DEFAULTFILENAME"}")
+    ;;
+
+  *)
+    echo "Usage 1: $SCRIPT path/to/$DEFAULTFILENAME"
+    echo "Usage 2: $SCRIPT path/to/backupdir runtag {override}"
+    echo "         (override defaults to $DEFAULTFILENAME)"
+    exit -1
+    ;;
+
+esac
+
+# fail safe if the file already exists - no accidental overwrites
+if [ -e "$BACKUP_TAR_GZ" ] ; then
+   echo "Error: $BACKUP_TAR_GZ already exists - will not be overwritten"
+   exit -1
+fi
+
+# assumptions
+IOTSTACK="$HOME/IOTstack"
+COMPOSE="$IOTSTACK/docker-compose.yml"
+VOLUMES="$IOTSTACK/volumes"
+NEXTCLOUD_VOLUMES="$VOLUMES/nextcloud"
+NEXTCLOUD_DB_BACKUP="$NEXTCLOUD_VOLUMES/db_backup"
+
+# is nextcloud running?
+if [ $(docker-compose -f "$COMPOSE" ps nextcloud nextcloud_db | wc -l) -ne 4 ]; then
+   echo "Warning: nextcloud and nextcloud_db containers are not running - backup skipped"
+   exit 0
+fi
+
+# make sure the nextcloud_db backup directory exists & has correct ownership & mode
+[ -d "$NEXTCLOUD_DB_BACKUP" ] || sudo mkdir -m 755 -p "$NEXTCLOUD_DB_BACKUP"
+[ $(stat -c "%U:%G" "$NEXTCLOUD_DB_BACKUP") = "$USER:$USER" ] || sudo chown -R $USER:$USER "$NEXTCLOUD_DB_BACKUP"
+[ $(stat -c "%a" "$NEXTCLOUD_DB_BACKUP") = "755" ] || sudo chmod -R 755 "$NEXTCLOUD_DB_BACKUP"
+
+# now we can begin
+echo "----- Starting $SCRIPT at $(date) -----"
+
+# create the file (sets ownership)
+touch "$BACKUP_TAR_GZ"
+
+# the nextcloud_db backup directory needs to be empty
+if [ $(ls -1 "$NEXTCLOUD_DB_BACKUP" | wc -l) -gt 0 ] ; then
+   echo "Erasing $NEXTCLOUD_DB_BACKUP"
+   sudo rm "$NEXTCLOUD_DB_BACKUP"/*
+fi
+
+# create a file to hold the list of inclusions
+BACKUP_INCLUDE="$(mktemp -p /dev/shm/)"
+
+# define the folders to be included in the backup.
+cat <<-INCLUSIONS >"$BACKUP_INCLUDE"
+./db_backup
+./html/config
+./html/custom_apps
+./html/data
+./html/themes
+INCLUSIONS
+
+# check that the items to be included exist
+echo "Paths included in the backup:"
+for INCLUDE in $(cat $BACKUP_INCLUDE); do
+   I=$(realpath "$NEXTCLOUD_VOLUMES/$INCLUDE")
+   if [ -d "$I" ]; then
+      echo " $I"
+   else
+      echo "Error: $I does not exist. This may indicate a problem with your installation - backup skipped."
+      exit -1
+   fi
+done
+
+# tell nextcloud to go into maintenance mode
+echo "Putting nextcloud into maintenance mode"
+docker exec -u www-data -it nextcloud php occ maintenance:mode --on
+
+# tell MariaDB to take a backup
+echo "Telling nextcloud_db (MariaDB) to create a portable backup"
+docker exec nextcloud_db bash -c 'mysqldump --single-transaction -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE >/backup/backup.sql'
+
+# perform the backup (relative to ~/IOTstack/volumes/nextcloud)
+echo "Collecting the backup files into a tar.gz"
+sudo tar \
+  -czf "$BACKUP_TAR_GZ" \
+  -C "$NEXTCLOUD_VOLUMES" \
+  -T "$BACKUP_INCLUDE"
+
+# tell nextcloud to come out of maintenance mode
+echo "Taking nextcloud out of maintenance mode"
+docker exec -u www-data -it nextcloud php occ maintenance:mode --off
+
+# report size of archive
+du -h "$BACKUP_TAR_GZ"
+
+echo "----- Finished $SCRIPT at $(date) -----"

@@ -1,0 +1,207 @@
+#!/usr/bin/env bash
+
+echo "Warning: Test script only - use at own risk"
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
+
+# support user renaming of script
+SCRIPT=$(basename "$0")
+
+# the default name and correct extension type is
+DEFAULTFILENAME="nextcloud-backup.tar.gz"
+
+# $1 is required and is either path to a .tar or the path to a folder
+# $2 is optional and is the runtag (yyyy-mm-dd_hhmm.host-name)
+# $3 is optional and overrides the default file name
+
+case "$#" in
+
+  1)
+    RESTORE_TAR_GZ=$(realpath "$1")
+    ;;
+
+  2 | 3)
+    RESTORE_TAR_GZ=$(realpath "$1/$2.${3:-"$DEFAULTFILENAME"}")
+    ;;
+
+  *)
+    echo "Usage 1: $SCRIPT path/to/$DEFAULTFILENAME"
+    echo "Usage 2: $SCRIPT path/to/backupdir runtag {override}"
+    echo "         (override defaults to $DEFAULTFILENAME)"
+    exit -1
+    ;;
+
+esac
+
+# it is an error if the restore tar does not exist
+if [ ! -e "$RESTORE_TAR_GZ" ] ; then
+   echo "Warning: $RESTORE_TAR_GZ does not exist - skipped"
+   exit 0
+fi
+
+# assumptions
+IOTSTACK="$HOME/IOTstack"
+COMPOSENAME="docker-compose.yml"
+COMPOSE="$IOTSTACK/$COMPOSENAME"
+VOLUMES="$IOTSTACK/volumes"
+NEXTCLOUD_VOLUMES="$VOLUMES/nextcloud"
+NEXTCLOUD_DB_NAME="db"
+NEXTCLOUD_DB_BACKUP_NAME="db_backup"
+NEXTCLOUD_HTML_NAME="html"
+NEXTCLOUD_DB="$NEXTCLOUD_VOLUMES/$NEXTCLOUD_DB_NAME"
+NEXTCLOUD_DB_BACKUP="$NEXTCLOUD_VOLUMES/$NEXTCLOUD_DB_BACKUP_NAME"
+NEXTCLOUD_HTML="$NEXTCLOUD_VOLUMES/$NEXTCLOUD_HTML_NAME"
+
+# check the key assumptions
+if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
+   echo "Error: One of the following does not exist:"
+   echo "   $IOTSTACK"
+   echo "   $COMPOSE"
+   echo "This may indicate a problem with your installation."
+   exit -1
+fi
+
+# check that nextcloud is not running
+if [ $(docker-compose -f "$COMPOSE" ps nextcloud nextcloud_db | wc -l) -gt 2 ]; then
+
+   echo "Error: The nextcloud and nextcloud_db containers should NOT be"
+   echo "       running at the start of a restore. Please deactivate"
+   echo "       both containers and try the restore again."
+   exit -1
+
+fi
+
+# now we can begin
+echo "----- Starting $SCRIPT at $(date) -----"
+
+# make a temporary directory to unpack into
+RESTOREDIR=$(mktemp -d -p "$IOTSTACK")
+
+# unpack the general backup into the temporary directory
+echo "unpacking $RESTORE_TAR_GZ"
+sudo tar -x --same-owner -z -f "$RESTORE_TAR_GZ" -C "$RESTOREDIR"
+
+# define restored structures in terms of the temporary directory
+NEXTCLOUD_DB_RESTOREDIR="$RESTOREDIR/$NEXTCLOUD_DB_BACKUP_NAME"
+NEXTCLOUD_HTML_RESTOREDIR="$RESTOREDIR/$NEXTCLOUD_HTML_NAME"
+
+# was a "db_backup" directory restored?
+if [ -d "$NEXTCLOUD_DB_RESTOREDIR" ] ; then
+
+   # make sure the nextcloud_db backup directory exists & has correct ownership & mode
+   [ -d "$NEXTCLOUD_DB_BACKUP" ] || sudo mkdir -m 755 -p "$NEXTCLOUD_DB_BACKUP"
+   [ $(stat -c "%U:%G" "$NEXTCLOUD_DB_BACKUP") = "$USER:$USER" ] || sudo chown $USER:$USER "$NEXTCLOUD_DB_BACKUP"
+   [ $(stat -c "%a" "$NEXTCLOUD_DB_BACKUP") = "755" ] || sudo chmod 755 "$NEXTCLOUD_DB_BACKUP"
+
+   # make sure the nextcloud_db runtime directory exists & has correct ownership & mode
+   [ -d "$NEXTCLOUD_DB" ] || sudo mkdir -m 755 -p "$NEXTCLOUD_DB"
+   [ $(stat -c "%U:%G" "$NEXTCLOUD_DB") = "$USER:$USER" ] || sudo chown $USER:$USER "$NEXTCLOUD_DB"
+   [ $(stat -c "%a" "$NEXTCLOUD_DB") = "755" ] || sudo chmod 755 "$NEXTCLOUD_DB"
+
+   # the target directory should be empty
+   if [ $(ls -1 "$NEXTCLOUD_DB_BACKUP" | wc -l) -gt 0 ] ; then
+      echo "Erasing $NEXTCLOUD_DB_BACKUP"
+      sudo rm -rf "$NEXTCLOUD_DB_BACKUP"/*
+   fi
+
+   # so does the nextcloud_db runtime directory
+   if [ $(ls -1 "$NEXTCLOUD_DB" | wc -l) -gt 0 ] ; then
+      echo "Erasing $NEXTCLOUD_DB"
+      sudo rm -rf "$NEXTCLOUD_DB"/*
+   fi
+
+   # iterate the restored contents
+   for SPATH in "$NEXTCLOUD_DB_RESTOREDIR"/* ; do
+
+      SNAME=$(basename "$SPATH")
+      DPATH="$NEXTCLOUD_DB_BACKUP/$SNAME"
+
+      echo "moving restored $SNAME into place"
+      sudo mv "$SPATH" "$DPATH"
+
+   done
+
+fi
+
+# was the "html" directory restored?
+if [ -d "$NEXTCLOUD_HTML_RESTOREDIR" ] ; then
+
+   # make sure the html runtime directory exists and has correct permissions
+   [ -d "$NEXTCLOUD_HTML" ] || sudo mkdir -m 755 -p "$NEXTCLOUD_HTML"
+   [ $(stat -c "%U:%G" "$NEXTCLOUD_HTML") = "www-data:root" ] || sudo chown -R www-data:root "$NEXTCLOUD_HTML"
+   [ $(stat -c "%a" "$NEXTCLOUD_HTML") = "755" ] || sudo chmod 755 "$NEXTCLOUD_HTML"
+
+   # but we do NOT erase it! This process is a "merge"
+   
+   # iterate the restored contents
+   for SPATH in "$NEXTCLOUD_HTML_RESTOREDIR"/* ; do
+
+      SNAME=$(basename "$SPATH")
+      DPATH="$NEXTCLOUD_HTML/$SNAME"
+
+      echo "removing old $DPATH"
+      sudo rm -rf  "$DPATH"
+
+      echo "moving restored $SNAME into place"
+      sudo mv "$SPATH" "$DPATH"
+
+   done
+
+fi
+
+# bring up the nextcloud_db container (done early to give time to start)
+echo "activating nextcloud_db (temporarily)"
+docker-compose -f "$COMPOSE" up -d nextcloud_db
+
+# wait for mariadb (nextcloud_db) to start listening to its port
+echo "waiting for MariaDB (nextcloud_db) on port 9322"
+while ! nc -w 1 127.0.0.1 9322 ; do 
+   sleep 1
+done
+
+# wait up to two minutes for the service to actually be available
+echo "waiting for MariaDB (nextcloud_db) service to start" 
+wget -O- -t 24 -w 5 http://127.0.0.1:9322 >/dev/null 2>&1
+
+# sense abject failure
+if [ $? -ne 0 ]; then
+   echo "nextcloud_db did not come up properly - unable to reload database"
+   exit -1
+fi
+
+# extra stabilisation time - prophylactic
+sleep 3
+
+# tell nextcloud_db to perform the restore
+echo "Telling nextcloud_db to restore a portable backup"
+docker exec nextcloud_db bash -c 'mysql -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE </backup/backup.sql'
+
+# extra stabilisation time - prophylactic
+sleep 3
+
+echo "activating nextcloud (temporarily)"
+docker-compose -f "$COMPOSE" up -d nextcloud
+
+echo "waiting for nextcloud on port 9321"
+while ! nc -w 1 127.0.0.1 9321 ; do 
+   sleep 1
+done
+
+echo "waiting for Nextcloud service to start" 
+wget -O- -t 24 -w 5 http://127.0.0.1:9321 >/dev/null 2>&1
+
+# extra stabilisation time - prophylactic
+sleep 3
+
+echo "Taking nextcloud out of maintenance mode"
+docker exec -u www-data -it nextcloud php occ maintenance:mode --off
+
+# take down nextcloud service
+echo "deactivating nextcloud and nextcloud_db"
+docker-compose -f "$COMPOSE" rm --force --stop -v nextcloud nextcloud_db
+
+echo "Cleaning up"
+rm -rf "$RESTOREDIR"
+
+echo "----- Finished $SCRIPT at $(date) -----"

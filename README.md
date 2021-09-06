@@ -21,17 +21,17 @@ In particular, these scripts will never be guaranteed to cover the full gamut of
 
 The scripts *should* work "as is" with any container type that can be backed-up safely by copying the contents of its `volumes` directory _while the container is running_. I call this the ***copy-safe*** property.
 
-Databases (other than SQLite) are the main exception. Like the official backup script upon which it is based, `iotstack_backup` handles `InfluxDB` properly, omits `nextcloud`, `postgres` and `mariadb` entirely, and completely ignores the problem for any container which is not *copy-safe*.
+Databases (other than SQLite) are the main exception. Like the official backup script upon which it is based, `iotstack_backup` handles `InfluxDB` properly, omits `postgres` and `mariadb` entirely, and completely ignores the problem for any container which is not *copy-safe*.
 
-When I first developed these scripts, there was no equivalent for `iotstack_restore` in [SensorsIot/IOTstack](https://github.com/SensorsIot/IOTstack). That was a gap I wanted to rectify. Running my `iotstack_restore` replaces the contents of the `services` and `volumes` directories, then restores the `InfluxDB` databases properly. Fairly obviously, `nextcloud` will be absent but any other non-*copy-safe* container may well be in a damaged state.
+When I first developed these scripts, there was no equivalent for `iotstack_restore` in [SensorsIot/IOTstack](https://github.com/SensorsIot/IOTstack). That was a gap I wanted to rectify. Running my `iotstack_restore` replaces the contents of the `services` and `volumes` directories, then restores the `InfluxDB` and `nextcloud` databases. Fairly obviously, `postgres` and `mariadb` will be absent but any other non-*copy-safe* container may well be in a damaged state.
 
-If you are running `nextcloud` or any container type which is not *copy-safe*, it is up to you to come up with an appropriate solution. Most database packages have their own backup & restore mechanisms. It is just a matter of working out what those are, how to implement them in a Docker environment, and then bolting that into your backup/restore scripts.
+If you are running any container type which is not *copy-safe*, it is up to you to come up with an appropriate solution. Most database packages have their own backup & restore mechanisms. It is just a matter of working out what those are, how to implement them in a Docker environment, and then bolting that into your backup/restore scripts.
 
 ## Contents
 
-- [setup](#setup)
-	- [Download repository](#downloadRepository)
-	- [Install scripts](#installScripts)
+- [Setup](#setup)
+	- [Download repository](#downloadRepository) – **!! CHANGED !!**
+	- [Preparing for Nextcloud backups](#nextcloudPreparation) – **!! NEW !!**
 	- [Install dependencies](#installDependencies)
 	- [The configuration file](#configFile)
 		- [method: ](#keyMethod)
@@ -46,10 +46,12 @@ If you are running `nextcloud` or any container type which is not *copy-safe*, i
 - [The backup side of things](#backupSide)
 	- [iotstack\_backup\_general](#iotstackBackupGeneral)
 	- [iotstack\_backup\_influxdb](#iotstackBackupInfluxdb)
+	- [iotstack\_backup\_nextcloud](#iotstackBackupNextcloud) – **!! NEW !!**
 	- [iotstack\_backup](#iotstackBackup)
 - [The restore side of things](#restoreSide)
 	- [iotstack\_restore\_general](#iotstackRestoreGeneral)
 	- [iotstack\_restore\_influxdb](#iotstackRestoreInfluxdb)
+	- [iotstack\_restore\_nextcloud](#iotstackRestoreNextcloud) – **!! NEW !!**
 	- [iotstack\_restore](#iotstackRestore)
 - [Bare-metal restore](#bareMetalRestore)
 - [iotstack\_reload\_influxdb](#iotstackReloadInfluxdb)
@@ -57,27 +59,29 @@ If you are running `nextcloud` or any container type which is not *copy-safe*, i
 	- [about *runtag*](#aboutRuntag)
 	- [about InfluxDB backup and restore commands](#aboutInfluxCommands)
 	- [about InfluxDB database restoration](#aboutInfluxRestore)
+	- [if Nextcloud gets stuck in "maintenance mode"](#nextcloudMaintenanceMode) – **!! NEW !!**
 	- [using cron to run iotstack\_backup](#usingcron)
 	- [periodic maintenance](#periodicMaintenance)
 
-## <a name="setup"> setup </a>
+## <a name="setup"> Setup </a>
 
 ### <a name="downloadRepository"> Download repository </a>
 
 Strictly speaking, this repository can be cloned anywhere on your Raspberry Pi. However, I recommend the `~/.local` directory:
 
-```
+```bash
 $ mkdir -p ~/.local
 $ cd ~/.local
 $ git clone https://github.com/Paraphraser/IOTstackBackup.git IOTstackBackup
+$ ./install_scripts.sh
 ```
 
-### <a name="installScripts"> Install scripts </a>
+If you have previously downloaded the repository, bring it up-to-date against GitHub:
 
-Run the following commands:
-
-```
+```bash
 $ cd ~/.local/IOTstackBackup
+$ git checkout master
+$ git pull
 $ ./install_scripts.sh
 ```
 
@@ -90,13 +94,13 @@ Notes:
 
 Check the result by executing:
 
-```
+```bash
 $ which iotstack_backup
 ```
 
 You will either see a path like:
 
-```
+```bash
 /home/pi/.local/bin/iotstack_backup
 ```
 
@@ -104,11 +108,93 @@ or get "silence". If `which` does not return a path, try logging-out and in agai
 
 > There are many reasons why a folder like `~/.local/bin` might not be in your search path. It is beyond the scope of this document to explore all the possibilities. Google is your friend.
 
+### <a name="nextcloudPreparation"> Preparing for Nextcloud backups</a>
+
+Nextcloud backup and restore was introduced in September 2021. It has several dependencies on IOTstack which you should check before your first run.
+
+1. Make sure your local copy of the IOTstack repository is fully up-to-date:
+
+	* If you normally run new menu (master branch):
+	
+		```bash
+		$ cd ~/IOTstack
+		$ git checkout master
+		$ git pull
+		```
+
+	* If you normally run old menu (old-menu branch):
+	
+		```bash
+		$ cd ~/IOTstack
+		$ git checkout old-menu
+		$ git pull
+		```
+
+2. List Nextcloud's reference service definition:
+
+	```bash
+	$ cat ~/IOTstack/.templates/nextcloud/service.yml
+	```
+	
+	At the time of writing, the new menu version it looked like this:
+	
+	```yaml
+	nextcloud:
+	  container_name: nextcloud
+	  image: nextcloud
+	  restart: unless-stopped
+	  environment:
+	    - MYSQL_HOST=nextcloud_db
+	    - MYSQL_PASSWORD=%randomMySqlPassword%
+	    - MYSQL_DATABASE=nextcloud
+	    - MYSQL_USER=nextcloud
+	  ports:
+	    - "9321:80"
+	  volumes:
+	    - ./volumes/nextcloud/html:/var/www/html
+	  depends_on:
+	    - nextcloud_db
+	  networks:
+	    - iotstack_nw
+	    - nextcloud_internal
+	
+	nextcloud_db:
+	  container_name: nextcloud_db
+	  build: ./.templates/mariadb/.
+	  restart: unless-stopped
+	  environment:
+	    - TZ=Etc/UTC
+	    - PUID=1000
+	    - PGID=1000
+	    - MYSQL_ROOT_PASSWORD=%randomPassword%
+	    - MYSQL_PASSWORD=%randomMySqlPassword%
+	    - MYSQL_DATABASE=nextcloud
+	    - MYSQL_USER=nextcloud
+	  ports:
+	    - "9322:3306"
+	  volumes:
+	    - ./volumes/nextcloud/db:/config
+	    - ./volumes/nextcloud/db_backup:/backup
+	  networks:
+	    - nextcloud_internal
+	```
+	
+	The old-menu version is similar, save that it:
+	
+	* omits references to `networks:`; and
+	* uses fixed passwords.
+	
+3. Compare and contrast your existing service definition for `nextcloud` and its database, and make appropriate adjustments.
+
+	**Key point**:
+	
+	* IOTstackBackup assumes this service definition structure and will probably fail if you change the relationship between the `nexcloud` and `nextcloud_db` containers.
+
 ### <a name="installDependencies"> Install dependencies </a>
 
 Make sure your system satisfies the following dependencies:
 
-```
+```bash
 $ sudo apt install -y rsync python3-pip python3-dev
 $ curl https://rclone.org/install.sh | sudo bash
 $ sudo pip3 install -U niet
@@ -119,7 +205,7 @@ Some (or all) may be installed already on your Raspberry Pi. Some things to note
 1. You can also install *rclone* via `sudo apt install -y rclone` but you get an obsolete version. It is better to use the method shown here.
 2. *niet* is a YAML parser (analogous to *jq* for JSON files).
 
-### <a name="configFile"> The configuration file </a> (!! new !!)
+### <a name="configFile"> The configuration file </a>
 
 The `iotstack_backup` and `iotstack_restore` scripts depend on a configuration file at the path:
 
@@ -203,14 +289,14 @@ To repeat: `retain` only affects what is retained on the Raspberry Pi.
 
 You can install a template [configuration file](#configFile) for *scp* like this:
 
-```
+```bash
 $ cd ~/.local/IOTstackBackup/configuration-templates
 $ ./install_template.sh SCP
 ``` 
 
 The template is:
 
-```
+```yaml
 backup:
   method: "SCP"
   prefix: "user@host.domain.com:path/to/backups"
@@ -231,7 +317,7 @@ You should test connectivity like this:
 
 1. Replace the right hand side with your actual values and execute the command:
 
-	```
+	```bash
 	$ PREFIX="user@host.domain.com:path/to/backups"
 	```
 	
@@ -243,7 +329,7 @@ You should test connectivity like this:
 
 2. Test sending from this host to the remote host:
 
-	```
+	```bash
 	$ touch test.txt
 	$ scp test.txt "$PREFIX/test.txt"
 	$ rm test.txt
@@ -251,7 +337,7 @@ You should test connectivity like this:
 
 3. Test fetching from the remote host to this host:
 
-	```	
+	```bash
 	$ scp "$PREFIX/test.txt" ./test.txt
 	$ rm test.txt
 	```
@@ -271,14 +357,14 @@ The `~/IOStack/backup` directory is trimmed at the end of each backup run. The t
 
 You can install a template [configuration file](#configFile) for *rsync* like this:
 
-```
+```bash
 $ cd ~/.local/IOTstackBackup/configuration-templates
 $ ./install_template.sh RSYNC
 ``` 
 
 The template is:
 
-```
+```yaml
 backup:
   method: "RSYNC"
   prefix: "user@host.domain.com:path/to/backups"
@@ -300,14 +386,14 @@ Selecting *rclone* unleashes the power of that package. However, this guide only
 
 You can install a template [configuration file](#configFile) for *rclone* like this:
 
-```
+```bash
 $ cd ~/.local/IOTstackBackup/configuration-templates
 $ ./install_template.sh RCLONE
 ``` 
 
 The template is:
 
-```
+```yaml
 backup:
   method: "RCLONE"
   prefix: "remote:path/to/backups"
@@ -334,7 +420,7 @@ The *authorising computer* **can** be your Raspberry Pi, providing it meets thos
 
 If the *authorising computer* is another computer then it should be running the same (or reasonably close) version of *rclone* as your Raspberry Pi. You should check both systems with:
 
-```
+```bash
 $ rclone version
 ```
 	
@@ -344,7 +430,7 @@ and perform any necessary software updates before you begin.
 
 1. Open a Terminal window and run the command:
 	
-	```
+	```bash
 	$ rclone authorize "dropbox"
 	```
 		
@@ -387,7 +473,7 @@ and perform any necessary software updates before you begin.
 
 1. Open a Terminal window and run the command:
 
-	```
+	```bash
 	$ rclone config
 	```
 
@@ -425,7 +511,7 @@ and perform any necessary software updates before you begin.
 12. Press <kbd>q</kbd> and <kbd>return</kbd> to "Quit config".
 13. Check your work:
 
-	```
+	```bash
 	$ rclone listremotes
 	```
 
@@ -453,7 +539,7 @@ You should test connectivity like this:
 
 1. Replace the right hand side of the following with your actual values and then execute the command:
 
-	```
+	```bash
 	$ PREFIX="dropbox:path/to/backups"
 	```
 	
@@ -466,7 +552,7 @@ You should test connectivity like this:
 
 2. Test communication with Dropbox:
 
-	```
+	```bash
 	$ rclone ls "$PREFIX"
 	```
 
@@ -486,7 +572,7 @@ For example, suppose you configure your Raspberry Pi to backup direct to Dropbox
 
 Now comes time to restore. You may wish to take advantage of the fact that your laptop is available, so you can mix and match like this:
 
-```
+```yaml
 backup:
   method: "RCLONE"
   prefix: "remote:path/to/backups"
@@ -501,7 +587,7 @@ restore:
 
 You can use the following command to check your [configuration file](#configFile): 
 
-```
+```bash
 $ show_iotstack_configuration
 ```
 
@@ -516,11 +602,12 @@ If this script returns sensible results that reflect what you have placed in the
 
 ## <a name="backupSide"> The backup side of things </a>
 
-There are three scripts:
+The backup side of things comprises the following scripts:
 
 * `iotstack_backup_general` – backs-up everything<sup>†</sup> except InfluxDB databases
 * `iotstack_backup_influxdb` – backs-up InfluxDB databases
-* `iotstack_backup` – a supervisory script which calls both of the above and handles copying of the results to another host via *scp*.
+* `iotstack_backup_nextcloud` – backs-up Nextcloud data and databases
+* `iotstack_backup` – a supervisory script which calls the above and handles copying of the results to another host.
 
 	† "everything" is a slightly loose term. See below.
 
@@ -532,7 +619,7 @@ In general, `iotstack_backup` is the script you should call.
 
 Usage (two forms):
 
-```
+```bash
 iotstack_backup_general path/to/general-backup.tar.gz
 iotstack_backup_general path/to/backupdir runtag {general-backup.tar.gz}
 ```
@@ -568,7 +655,7 @@ The reason for implementing this as a standalone script is to make it easier to 
 
 Example:
 
-```
+```bash
 $ cd
 $ mkdir my_special_backups
 $ cd my_special_backups
@@ -579,7 +666,7 @@ $ iotstack_backup_general before_major_changes.tar.gz
 
 Usage (two forms):
 
-```
+```bash
 iotstack_backup_influxdb path/to/influx-backup.tar
 iotstack_backup_influxdb path/to/backupdir runtag {influx-backup.tar}
 ```
@@ -599,18 +686,45 @@ The reason for implementing this as a standalone script is to make it easier to 
 
 Example:
 
-```
+```bash
 $ cd
 $ mkdir my_special_backups
 $ cd my_special_backups
 $ iotstack_backup_influxdb before_major_changes.tar
 ```
 
+### <a name="iotstackBackupNextcloud"> iotstack\_backup\_nextcloud </a>
+
+Usage (two forms):
+
+```bash
+iotstack_backup_nextcloud path/to/nextcloud-backup.tar.gz
+iotstack_backup_nextcloud path/to/backupdir runtag {nextcloud-backup.tar.gz}
+```
+
+* In the first form, the argument is an absolute or relative path to the backup file.
+* In the second form, the path to the backup file is constructed like this:
+
+	```
+	path/to/backupdir/runtag.nextcloud-backup.tar.gz
+	```
+
+	with *nextcloud-backup.tar.gz* being replaced if you supply a third argument.
+	
+The reason for implementing this as a standalone script is to make it easier to take snapshots and/or build your own backup strategy. Example:
+
+```bash
+$ cd
+$ mkdir my_special_backups
+$ cd my_special_backups
+$ iotstack_backup_nextcloud before_major_changes.tar.gz
+```
+
 ### <a name="iotstackBackup"> iotstack\_backup </a>
 
 Usage:
 
-```
+```bash
 iotstack_backup {runtag} {by_host_id}
 ```
 
@@ -636,11 +750,12 @@ The files are copied to the remote host using the method you defined in the [con
 
 ## <a name="restoreSide"> The restore side of things </a>
 
-There are three scripts which provide the inverse functionality of the backup scripts:
+The restore side of things provide the inverse functionality of the backup scripts and comprise the following scripts:
 
 * `iotstack_restore_general ` – restores everything present in the general backup
 * `iotstack_restore_influxdb ` – restores InfluxDB databases
-* `iotstack_restore` – a general restore which calls both of the above
+* `iotstack_restore_nextcloud ` – restores Nextcloud data and databases
+* `iotstack_restore` – a supervisory script which retrieves backup images from another host and then calls the above scripts.
 
 In general, `iotstack_restore` is the script you should call.
 
@@ -648,7 +763,7 @@ In general, `iotstack_restore` is the script you should call.
 
 Usage (two forms):
 
-```
+```bash
 iotstack_restore_general path/to/general-backup.tar.gz
 iotstack_restore_general path/to/backupdir runtag {general-backup.tar.gz}
 ```
@@ -704,7 +819,7 @@ The reason for implementing the "general" restore as a standalone script is to m
 
 Example:
 
-```
+```bash
 $ cd ~/my_special_backups
 $ iotstack_restore_general before_major_changes.tar.gz
 ```
@@ -713,7 +828,7 @@ $ iotstack_restore_general before_major_changes.tar.gz
 
 Usage (two forms):
 
-```
+```bash
 iotstack_restore_influxdb path/to/influx-backup.tar
 iotstack_restore_influxdb path/to/backupdir runtag {influx-backup.tar}
 ```
@@ -737,17 +852,42 @@ iotstack_restore_influxdb path/to/backupdir runtag {influx-backup.tar}
 	* instructing influx to restore the contents of `~/IOTstack/backups/influxdb/db`
 	* terminating the `influxdb` container.
 
+### <a name="iotstackRestoreNextcloud"> iotstack\_restore\_nextcloud </a>
+
+Usage (two forms):
+
+```bash
+iotstack_restore_nextcloud path/to/nextcloud-backup.tar.gz
+iotstack_restore_nextcloud path/to/backupdir runtag {nextcloud-backup.tar.gz}
+```
+
+* In the first form, the argument is an absolute or relative path to the backup file.
+* In the second form, the path to the backup file is constructed like this:
+
+	```
+	path/to/backupdir/runtag.nextcloud-backup.tar.gz
+	```
+
+	with *nextcloud-backup.tar.gz* being replaced if you supply a third argument.
+	
+* In both cases, *nextcloud-backup.tar.gz* (or whatever filename you supply) is expected to be a file created by `iotstack_backup_nextcloud`. The result is undefined if this expectation is not satisfied.
+* Running `iotstack_restore_nextcloud`:
+	* ensures the nextcloud and nextcloud_db containers are not running
+	* erases the existing nextcloud_db (MariaDB) database
+	* restores the contents of a portable MariaDB backup
+	* merges the contents of the restored `www` folder by replacing whole subfolders
+
 ### <a name="iotstackRestore"> iotstack\_restore </a>
 
 Usage:
 
-```
+```bash
 iotstack_restore runtag {by_host_dir}
 ```
 
 * *runtag* is a _required_ argument which must exactly match the *runtag* used by the `iotstack_backup` run you wish to restore. For example:
 
-	```
+	```bash
 	$ iotstack_restore 2020-09-19_1138.iot-hub
 	```
 	
@@ -790,7 +930,7 @@ Scenario. Your SD card wears out, or your Raspberry Pi emits magic smoke, or you
 2. Install all the dependencies (eg git, curl, wget, rsync, rclone, niet).
 3. Clone the [SensorsIot/IOTstack](https://github.com/SensorsIot/IOTstack) repository.
 
-	```
+	```bash
 	$ git clone -b old-menu https://github.com/SensorsIot/IOTstack.git ~/IOTstack
 	```
  
@@ -800,12 +940,13 @@ Scenario. Your SD card wears out, or your Raspberry Pi emits magic smoke, or you
 
 4. Mimic how the menu installs Docker and Docker-Compose (the following is a superset of old- and new-menu):
 
-	```	
+	```bash
 	$ sudo bash -c '[ $(egrep -c "^allowinterfaces eth*,wlan*" /etc/dhcpcd.conf) -eq 0 ] && echo "allowinterfaces eth*,wlan*" >> /etc/dhcpcd.conf'
 	$ curl -fsSL https://get.docker.com | sh
 	$ sudo usermod -G docker -a $USER
 	$ sudo usermod -G bluetooth -a $USER
 	$ sudo apt install -y python3-pip python3-dev
+	$ [ "$(uname -m)" = "aarch64" ] && sudo apt install libffi-dev
 	$ sudo pip3 install -U docker-compose
 	$ sudo pip3 install -U ruamel.yaml==0.16.12 blessed
 	```
@@ -813,7 +954,7 @@ Scenario. Your SD card wears out, or your Raspberry Pi emits magic smoke, or you
 5. Reboot.
 6. Clone the [Paraphraser/IOTstackBackup](https://github.com/https://github.com/Paraphraser/IOTstackBackup) repository and install the scripts:
 
-	```
+	```bash
 	$ mkdir -p ~/.local
 	$ cd ~/.local
 	$ git clone https://github.com/Paraphraser/IOTstackBackup.git IOTstackBackup
@@ -835,13 +976,13 @@ Scenario. Your SD card wears out, or your Raspberry Pi emits magic smoke, or you
 
 Usage:
 
-```
+```bash
 iotstack_reload_influxdb
 ```
 
 I wrote this script because I noticed a difference in behaviour between my "live" and "test" RPis. Executing this command:
 
-```
+```bash
 $ docker exec -it influxdb bash
 ```
 
@@ -886,13 +1027,13 @@ You are welcome to fix the scripts so that you can pass arbitrary quoted strings
 
 When you examine the scripts, you will see that `influxd` is instructed to perform a backup like this:
 
-```
+```bash
 docker exec influxdb influxd backup -portable /var/lib/influxdb/backup
 ```
 
 while a restore is handled like this:
 
-```
+```bash
 docker exec influxdb influxd restore -portable /var/lib/influxdb/backup
 ```
 
@@ -909,13 +1050,21 @@ yyyy/mm/dd hh:mm:ss Meta info not found for shard nnn on database _internal. Ski
 
 I have no idea what the "Meta info not found" messages actually mean. They sound ominous but they seem to be harmless. I have done a number of checks and have never encountered any data loss across a backup and restore. I think these messages can be ignored.
 
+### <a name="nextcloudMaintenanceMode"> if Nextcloud gets stuck in "maintenance mode" </a>
+
+If Nextcloud backup fails, you may find that Nextcloud has been left in "maintenance mode" and you are locked out. To take Nextcloud out of maintenance mode:
+
+```bash
+$ docker exec -u www-data -it nextcloud php occ maintenance:mode --off
+```
+
 ### <a name="usingcron">using cron to run iotstack\_backup </a>
 
 I do it like this.
 
 1. Scaffolding:
 
-	```
+	```bash
 	$ mkdir ~/Logs
 	$ touch ~/Logs/iotstack_backup.log
 	```
@@ -932,11 +1081,11 @@ I do it like this.
 	
 	* Run the following command:
 	
-		```
+		```bash
 		$ which iotstack_backup
 		```
 		
-		You ran this command earlier at [Install scripts](#installScripts) to confirm that the scripts had been installed where Raspberry Pi OS could find them. This time, you should **not** get silence but should, instead, get an answer like:
+		You ran this command earlier at [Download repository](#downloadRepository) to confirm that the scripts had been installed where Raspberry Pi OS could find them. This time, you should **not** get silence but should, instead, get an answer like:
 		
 		```
 		/home/pi/.local/bin/iotstack_backup
@@ -944,7 +1093,7 @@ I do it like this.
 		
 	* Copy the entire `PATH` statement to the clipboard, then paste it into your terminal window and run it. For example:
 
-		```
+		```bash
 		$ PATH=/home/pi/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 		```
 
@@ -970,7 +1119,7 @@ I do it like this.
 	```
 	
 	See [crontab.guru](https://crontab.guru/#00_11_*_*_*) if you want to understand the syntax of the last line.
-	
+
 The completed `crontab` would look like this:
 
 ```
@@ -986,7 +1135,7 @@ If you are unsure about how to set up a `crontab`:
 
 1. First check whether you have an existing `crontab` by:
 
-	```
+	```bash
 	$ crontab -l
 	```
 	
@@ -1000,7 +1149,7 @@ If you are unsure about how to set up a `crontab`:
 
 	* ***Either*** – edit your `crontab` in-situ via this command:
 	
-		```
+		```bash
 		$ crontab -e
 		```
 	
@@ -1008,7 +1157,7 @@ If you are unsure about how to set up a `crontab`:
  		
  	* ***Or*** – prepare your `crontab` as a separate file (eg "my-crontab.txt") and import it:
 
-		```
+		```bash
 		$ crontab my-crontab.txt
 		```
 	
@@ -1016,13 +1165,13 @@ If you are unsure about how to set up a `crontab`:
 	
 	* ***Or*** – combine the two methods. First, if you have an existing `crontab`, export it to a file:
 	
-		```
+		```bash
 		$ crontab -l >my-crontab.txt
 		```
 			
 		Edit the "my-crontab.txt" file, and finish by re-importing the edited file:
 			
-		```
+		```bash
 		$ crontab my-crontab.txt
 		```
 
@@ -1034,7 +1183,7 @@ When things don't go as expected (eg a permissions issue), the information you w
 
 From time to time, you should synchronise your local copy of the IOTstackBackup repository by synchronising it with GitHub and then reinstall the scripts:
 
-```
+```bash
 $ cd ~/.local/IOTstackBackup
 $ git pull
 $ ./install_scripts.sh
