@@ -36,13 +36,13 @@ if [ $(docker-compose ps | grep -c influxdb) -gt 0 ]; then
 	echo "influxdb backup complete"
 
 	echo "deactivating influxdb"
-	docker-compose stop influxdb
+	docker-compose rm --force --stop -v influxdb
 
 	echo "removing the running database"
 	sudo rm -rf "$INFLUXDATA"
 
 	echo "restarting influxdb"
-	docker-compose up -d
+	docker-compose up -d influxdb
 
 	echo "reloading the influx databases"
 	docker exec influxdb influxd restore -portable /var/lib/influxdb/backup
