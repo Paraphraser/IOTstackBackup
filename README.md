@@ -73,7 +73,7 @@ Strictly speaking, this repository can be cloned anywhere on your Raspberry Pi. 
 $ mkdir -p ~/.local
 $ cd ~/.local
 $ git clone https://github.com/Paraphraser/IOTstackBackup.git IOTstackBackup
-$ ./install_scripts.sh
+$ ./IOTstackBackup/install_scripts.sh
 ```
 
 If you have previously downloaded the repository, bring it up-to-date against GitHub:
