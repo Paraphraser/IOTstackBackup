@@ -30,8 +30,8 @@ If you are running any container type which is not *copy-safe*, it is up to you 
 ## Contents
 
 - [Setup](#setup)
-	- [Download repository](#downloadRepository) – **!! CHANGED !!**
-	- [Preparing for Nextcloud backups](#nextcloudPreparation) – **!! NEW !!**
+	- [Download repository](#downloadRepository)
+	- [Preparing for Nextcloud backups](#nextcloudPreparation) – **!! UPDATED 2021-10-27 !!**
 	- [Install dependencies](#installDependencies)
 	- [The configuration file](#configFile)
 		- [method: ](#keyMethod)
@@ -46,12 +46,12 @@ If you are running any container type which is not *copy-safe*, it is up to you 
 - [The backup side of things](#backupSide)
 	- [iotstack\_backup\_general](#iotstackBackupGeneral)
 	- [iotstack\_backup\_influxdb](#iotstackBackupInfluxdb)
-	- [iotstack\_backup\_nextcloud](#iotstackBackupNextcloud) – **!! NEW !!**
+	- [iotstack\_backup\_nextcloud](#iotstackBackupNextcloud)
 	- [iotstack\_backup](#iotstackBackup)
 - [The restore side of things](#restoreSide)
 	- [iotstack\_restore\_general](#iotstackRestoreGeneral)
 	- [iotstack\_restore\_influxdb](#iotstackRestoreInfluxdb)
-	- [iotstack\_restore\_nextcloud](#iotstackRestoreNextcloud) – **!! NEW !!**
+	- [iotstack\_restore\_nextcloud](#iotstackRestoreNextcloud)
 	- [iotstack\_restore](#iotstackRestore)
 - [Bare-metal restore](#bareMetalRestore)
 - [iotstack\_reload\_influxdb](#iotstackReloadInfluxdb)
@@ -59,7 +59,7 @@ If you are running any container type which is not *copy-safe*, it is up to you 
 	- [about *runtag*](#aboutRuntag)
 	- [about InfluxDB backup and restore commands](#aboutInfluxCommands)
 	- [about InfluxDB database restoration](#aboutInfluxRestore)
-	- [if Nextcloud gets stuck in "maintenance mode"](#nextcloudMaintenanceMode) – **!! NEW !!**
+	- [if Nextcloud gets stuck in "maintenance mode"](#nextcloudMaintenanceMode)
 	- [using cron to run iotstack\_backup](#usingcron)
 	- [periodic maintenance](#periodicMaintenance)
 
@@ -190,6 +190,34 @@ Nextcloud backup and restore was introduced in September 2021. It has several de
 	
 	* IOTstackBackup assumes this service definition structure and will probably fail if you change the relationship between the `nexcloud` and `nextcloud_db` containers.
 
+4. Run the following command:
+
+	```bash
+	$ docker ps --format "table {{.Names}}\t{{.RunningFor}}\t{{.Status}}" --filter name=nextcloud_db
+	```
+	
+	The expected output is:
+	
+	```
+	NAMES          CREATED         STATUS
+	nextcloud_db   «time period»   Up «time period» (healthy)
+	```
+	
+	Notice the "healthy" annotation. If the container has only just started, you might also see "(health: starting)". Both of those are indications that a "health check" process is running inside the container.
+	
+	The `iotstack_restore_nextcloud` script depends on the availability of the health check process.
+	
+	The health check process for MariaDB containers was added to IOTstack on 2021-10-17. If you do **not** see evidence that your instance of `nextcloud_db` is running its health check process, you probably need to rebuild your `nextcloud_db` instance, like this:
+	
+	```
+	$ cd ~/IOTstack
+	$ docker-compose -f build --no-cache --pull nextcloud_db
+	```
+	
+	Note:
+	
+	* This assumes you did Step 1 (the `git pull` to bring your local copy of the IOTstack repository is fully up-to-date).
+	
 ### <a name="installDependencies"> Install dependencies </a>
 
 Make sure your system satisfies the following dependencies:

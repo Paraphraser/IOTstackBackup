@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-echo "Warning: Test script only - use at own risk"
+echo "Warning: Development script. Seems reasonably reliable but you"
+echo "         should test for suitability in your own environment"
+echo "         before you depend on it for production use."
 
 # should not run as root
 [ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
@@ -150,31 +152,54 @@ if [ -d "$NEXTCLOUD_HTML_RESTOREDIR" ] ; then
 
 fi
 
+echo "cleaning up intermediate files"
+rm -rf "$RESTOREDIR"
+
 # bring up the nextcloud_db container (done early to give time to start)
 echo "activating nextcloud_db (temporarily)"
 docker-compose -f "$COMPOSE" up -d nextcloud_db
 
-# wait for mariadb (nextcloud_db) to start listening to its port
-echo "waiting for MariaDB (nextcloud_db) on port 9322"
-while ! nc -w 1 127.0.0.1 9322 ; do 
-   sleep 1
+# extra stabilisation time - prophylactic
+sleep 3
+
+# wait for mariadb (nextcloud_db) to be ready for business
+echo "waiting for nextcloud_db to start"
+RETRIES=30
+while : ; do
+
+   # see if nextcloud_db reports itself ready for business
+   docker exec nextcloud_db iotstack_healthcheck.sh >/dev/null 2>&1
+
+   # is the container ready?
+   if [ $? -ne 0 ] ; then
+
+      # no! decrement the retry counter
+      let "RETRIES-=1"
+
+      # should we retry?
+      if [ $RETRIES -gt 0 ] ; then
+
+         # yes! wait, then retry
+         sleep 1 ; echo "  re-trying ($RETRIES) ..." ; continue
+
+      fi
+
+      # retries exhausted - declare failure
+      echo "nextcloud_db did not come up properly - unable to reload database"
+      exit -1
+
+   fi
+
+   # healthcheck passed
+   break;
+
 done
-
-# wait up to two minutes for the service to actually be available
-echo "waiting for MariaDB (nextcloud_db) service to start" 
-wget -O- -t 24 -w 5 http://127.0.0.1:9322 >/dev/null 2>&1
-
-# sense abject failure
-if [ $? -ne 0 ]; then
-   echo "nextcloud_db did not come up properly - unable to reload database"
-   exit -1
-fi
 
 # extra stabilisation time - prophylactic
 sleep 3
 
 # tell nextcloud_db to perform the restore
-echo "Telling nextcloud_db to restore a portable backup"
+echo "telling nextcloud_db to restore a portable backup"
 docker exec nextcloud_db bash -c 'mysql -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE </backup/backup.sql'
 
 # extra stabilisation time - prophylactic
@@ -183,13 +208,38 @@ sleep 3
 echo "activating nextcloud (temporarily)"
 docker-compose -f "$COMPOSE" up -d nextcloud
 
-echo "waiting for nextcloud on port 9321"
-while ! nc -w 1 127.0.0.1 9321 ; do 
-   sleep 1
-done
+echo "waiting for nextcloud to start"
+RETRIES=30
+while : ; do
 
-echo "waiting for Nextcloud service to start" 
-wget -O- -t 24 -w 5 http://127.0.0.1:9321 >/dev/null 2>&1
+   # is the container listening on port 9321?
+   if nc -w 1 127.0.0.1 9321 ; then
+
+      # yes! attempt to fetch data from the port
+      wget -O- -t 24 -w 5 http://127.0.0.1:9321 >/dev/null 2>&1
+
+      # leave the while loop on success
+      if [ $? -eq 8 ] ; then break ; fi
+
+   fi
+
+   # decrement the retry counter
+   let "RETRIES-=1"
+
+   # should we retry?
+   if [ $RETRIES -gt 0 ] ; then
+
+      # yes! wait, then retry
+      sleep 1 ; echo "  re-trying ($RETRIES) ..." ; continue
+
+   fi
+
+   # retries exhausted - declare failure
+   echo "nextcloud did not come up properly"
+   echo " - unable to ensure Nextcloud is taken out of maintenance mode"
+   exit -1
+
+done
 
 # extra stabilisation time - prophylactic
 sleep 3
@@ -200,8 +250,5 @@ docker exec -u www-data -it nextcloud php occ maintenance:mode --off
 # take down nextcloud service
 echo "deactivating nextcloud and nextcloud_db"
 docker-compose -f "$COMPOSE" rm --force --stop -v nextcloud nextcloud_db
-
-echo "Cleaning up"
-rm -rf "$RESTOREDIR"
 
 echo "----- Finished $SCRIPT at $(date) -----"
