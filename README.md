@@ -209,9 +209,10 @@ Nextcloud backup and restore was introduced in September 2021. It has several de
 	
 	The health check process for MariaDB containers was added to IOTstack on 2021-10-17. If you do **not** see evidence that your instance of `nextcloud_db` is running its health check process, you probably need to rebuild your `nextcloud_db` instance, like this:
 	
-	```
+	```bash
 	$ cd ~/IOTstack
 	$ docker-compose -f build --no-cache --pull nextcloud_db
+	$ docker-compose up -d nextcloud_db
 	```
 	
 	Note:
