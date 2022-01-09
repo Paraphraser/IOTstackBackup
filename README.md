@@ -27,11 +27,15 @@ When I first developed these scripts, there was no equivalent for `iotstack_rest
 
 If you are running any container type which is not *copy-safe*, it is up to you to come up with an appropriate solution. Most database packages have their own backup & restore mechanisms. It is just a matter of working out what those are, how to implement them in a Docker environment, and then bolting that into your backup/restore scripts.
 
+**Please note:**
+
+* The InfluxDB backup service provided by this repo is for Influx 1.8. I have **not** tested with Influx 2.0.
+
 ## Contents
 
 - [Setup](#setup)
 	- [Download repository](#downloadRepository)
-	- [Preparing for Nextcloud backups](#nextcloudPreparation) – **!! UPDATED 2021-10-27 !!**
+	- [Preparing for Nextcloud backups](#nextcloudPreparation)
 	- [Install dependencies](#installDependencies)
 	- [The configuration file](#configFile)
 		- [method: ](#keyMethod)
@@ -953,53 +957,23 @@ Each script assumes that the path to its backup file can be derived from those t
 
 ## <a name="bareMetalRestore"> Bare-metal restore </a>
 
-Scenario. Your SD card wears out, or your Raspberry Pi emits magic smoke, or you decide the time has come for a fresh start:
+Scenario. Your SD card wears out, or your Raspberry Pi emits magic smoke, or you decide the time has come for a fresh start. 
 
-1. Image a new SD card and/or build an SSD image.
-2. Install all the dependencies (eg git, curl, wget, rsync, rclone, niet).
-3. Clone the [SensorsIot/IOTstack](https://github.com/SensorsIot/IOTstack) repository.
-
-	```bash
-	$ git clone -b old-menu https://github.com/SensorsIot/IOTstack.git ~/IOTstack
-	```
+1. Use [PiBuilder](https://github.com/Paraphraser/PiBuilder) to construct a new operating system. Starting from a new SD card or SSD with a fresh Raspberry Pi OS image, PiBuilder:
  
-	Note:
+	* Installs all the dependencies, including Docker and Docker-Compose
+	* Installs all recommended system patches
+	* Clones the [SensorsIot/IOTstack](https://github.com/SensorsIot/IOTstack) repository
+	* Clones and installs this IOTstackBackup repository; and
+	* Will even install the following files, if you provide them to PiBuilder:
+
+		```
+		~/.config/rclone/rclone.conf
+		~/.config/iotstack_backup/config.yml
+		```
 	
-	* if you prefer "new menu" then omit the `-b old-menu`
-
-4. Mimic how the menu installs Docker and Docker-Compose (the following is a superset of old- and new-menu):
-
-	```bash
-	$ sudo bash -c '[ $(egrep -c "^allowinterfaces eth*,wlan*" /etc/dhcpcd.conf) -eq 0 ] && echo "allowinterfaces eth*,wlan*" >> /etc/dhcpcd.conf'
-	$ curl -fsSL https://get.docker.com | sh
-	$ sudo usermod -G docker -a $USER
-	$ sudo usermod -G bluetooth -a $USER
-	$ sudo apt install -y python3-pip python3-dev
-	$ [ "$(uname -m)" = "aarch64" ] && sudo apt install libffi-dev
-	$ sudo pip3 install -U docker-compose
-	$ sudo pip3 install -U ruamel.yaml==0.16.12 blessed
-	```
-	
-5. Reboot.
-6. Clone the [Paraphraser/IOTstackBackup](https://github.com/https://github.com/Paraphraser/IOTstackBackup) repository and install the scripts:
-
-	```bash
-	$ mkdir -p ~/.local
-	$ cd ~/.local
-	$ git clone https://github.com/Paraphraser/IOTstackBackup.git IOTstackBackup
-	$ cd IOTstackBackup
-	$ ./install_scripts.sh
-	```
-
-7. Either recover or recreate both:
-
-	```
-	~/.config/rclone/rclone.conf
-	~/.config/iotstack_backup/config.yml
-	```
-	
-8. Run `iotstack_restore` with the runtag of a recent backup. Among other things, this will recover `docker-compose.yml` (ie there is no need to run the menu and re-select your services).
-9. Bring up the stack.
+2. Run `iotstack_restore` with the runtag of a recent backup. Among other things, this will recover `docker-compose.yml` (ie there is no need to run the menu and re-select your services).
+3. Bring up the stack.
 
 ## <a name="iotstackReloadInfluxdb"> iotstack\_reload\_influxdb </a>
 
