@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
 
-echo "Warning: Development script. Seems reasonably reliable but you"
-echo "         should test for suitability in your own environment"
-echo "         before you depend on it for production use."
-
 # should not run as root
 [ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
 
