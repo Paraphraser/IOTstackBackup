@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # IOTstack lives here
-IOTSTACK="$HOME/IOTstack"
+IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
 
 # the backup directory is
 BACKUPDIR="$IOTSTACK/backups"

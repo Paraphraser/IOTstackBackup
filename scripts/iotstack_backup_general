@@ -39,7 +39,7 @@ if [ -e "$BACKUP_TAR_GZ" ] ; then
 fi
 
 # assumptions
-IOTSTACK="$HOME/IOTstack"
+IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
 COMPOSE="$IOTSTACK/docker-compose.yml"
 
 # check the key assumptions

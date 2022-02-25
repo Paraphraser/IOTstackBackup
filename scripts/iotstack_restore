@@ -63,7 +63,7 @@ CLOUD_PREFIX=${CLOUD_PREFIX:-"myuser@myhost.mydomain.com:/path/to/backup/directo
 CLOUD_PATH="$CLOUD_PREFIX/$BY_HOST_DIR"
 
 # assumptions
-IOTSTACK="$HOME/IOTstack"
+IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
 COMPOSE="$IOTSTACK/docker-compose.yml"
 
 # check the key assumption

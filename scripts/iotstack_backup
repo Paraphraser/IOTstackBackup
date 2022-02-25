@@ -65,18 +65,18 @@ LOCAL_RETAIN=${LOCAL_RETAIN:-"8"}
 CLOUD_PATH="$CLOUD_PREFIX/$BY_HOST_DIR"
 
 # assumptions
-IOTSTACKDIR="$HOME/IOTstack"
-BACKUPSDIR="$IOTSTACKDIR/backups"
-COMPOSE="$IOTSTACKDIR/docker-compose.yml"
+IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
+BACKUPSDIR="$IOTSTACK/backups"
+COMPOSE="$IOTSTACK/docker-compose.yml"
 LOGNAME="backup-log"
 LOGFILE="$RUNTAG.$LOGNAME.txt"
 GENERALNAME="general-backup"
 INFLUXNAME="influx-backup"
 
 # check the key assumptions
-if ! [ -d "$IOTSTACKDIR" -a -e "$COMPOSE" ] ; then
+if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
    echo "Error: One of the following does not exist:"
-   echo "   $IOTSTACKDIR"
+   echo "   $IOTSTACK"
    echo "   $COMPOSE"
    echo "This may indicate a problem with your installation."
    exit -1

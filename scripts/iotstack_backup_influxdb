@@ -39,7 +39,7 @@ if [ -e "$BACKUP_TAR" ] ; then
 fi
 
 # assumptions
-IOTSTACK="$HOME/IOTstack"
+IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
 COMPOSE="$IOTSTACK/docker-compose.yml"
 BACKUPS="$IOTSTACK/backups"
 INFLUXBACKUP="$BACKUPS/influxdb"

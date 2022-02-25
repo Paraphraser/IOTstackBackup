@@ -61,6 +61,7 @@ If you are running any container type which is not *copy-safe*, it is up to you 
 - [iotstack\_reload\_influxdb](#iotstackReloadInfluxdb)
 - [Notes](#endNotes)
 	- [about *runtag*](#aboutRuntag)
+	- [about `$HOME/IOTstack` assumption](#topdir)
 	- [about InfluxDB backup and restore commands](#aboutInfluxCommands)
 	- [about InfluxDB database restoration](#aboutInfluxRestore)
 	- [if Nextcloud gets stuck in "maintenance mode"](#nextcloudMaintenanceMode)
@@ -119,7 +120,7 @@ Nextcloud backup and restore was introduced in September 2021. It has several de
 1. Make sure your local copy of the IOTstack repository is fully up-to-date:
 
 	* If you normally run new menu (master branch):
-	
+
 		```bash
 		$ cd ~/IOTstack
 		$ git checkout master
@@ -127,7 +128,7 @@ Nextcloud backup and restore was introduced in September 2021. It has several de
 		```
 
 	* If you normally run old menu (old-menu branch):
-	
+
 		```bash
 		$ cd ~/IOTstack
 		$ git checkout old-menu
@@ -139,9 +140,9 @@ Nextcloud backup and restore was introduced in September 2021. It has several de
 	```bash
 	$ cat ~/IOTstack/.templates/nextcloud/service.yml
 	```
-	
+
 	At the time of writing, the new menu version it looked like this:
-	
+
 	```yaml
 	nextcloud:
 	  container_name: nextcloud
@@ -161,7 +162,7 @@ Nextcloud backup and restore was introduced in September 2021. It has several de
 	  networks:
 	    - iotstack_nw
 	    - nextcloud_internal
-	
+
 	nextcloud_db:
 	  container_name: nextcloud_db
 	  build: ./.templates/mariadb/.
@@ -182,16 +183,16 @@ Nextcloud backup and restore was introduced in September 2021. It has several de
 	  networks:
 	    - nextcloud_internal
 	```
-	
+
 	The old-menu version is similar, save that it:
-	
+
 	* omits references to `networks:`; and
 	* uses fixed passwords.
-	
+
 3. Compare and contrast your existing service definition for `nextcloud` and its database, and make appropriate adjustments.
 
 	**Key point**:
-	
+
 	* IOTstackBackup assumes this service definition structure and will probably fail if you change the relationship between the `nexcloud` and `nextcloud_db` containers.
 
 4. Run the following command:
@@ -199,30 +200,30 @@ Nextcloud backup and restore was introduced in September 2021. It has several de
 	```bash
 	$ docker ps --format "table {{.Names}}\t{{.RunningFor}}\t{{.Status}}" --filter name=nextcloud_db
 	```
-	
+
 	The expected output is:
-	
+
 	```
 	NAMES          CREATED         STATUS
 	nextcloud_db   «time period»   Up «time period» (healthy)
 	```
-	
+
 	Notice the "healthy" annotation. If the container has only just started, you might also see "(health: starting)". Both of those are indications that a "health check" process is running inside the container.
-	
+
 	The `iotstack_restore_nextcloud` script depends on the availability of the health check process.
-	
+
 	The health check process for MariaDB containers was added to IOTstack on 2021-10-17. If you do **not** see evidence that your instance of `nextcloud_db` is running its health check process, you probably need to rebuild your `nextcloud_db` instance, like this:
-	
+
 	```bash
 	$ cd ~/IOTstack
 	$ docker-compose -f build --no-cache --pull nextcloud_db
 	$ docker-compose up -d nextcloud_db
 	```
-	
+
 	Note:
-	
+
 	* This assumes you did Step 1 (the `git pull` to bring your local copy of the IOTstack repository is fully up-to-date).
-	
+
 ### <a name="installDependencies"> Install dependencies </a>
 
 Make sure your system satisfies the following dependencies:
@@ -353,9 +354,9 @@ You should test connectivity like this:
 	```bash
 	$ PREFIX="user@host.domain.com:path/to/backups"
 	```
-	
+
 	Notes:
-	
+
 	* The right hand side should not contain embedded spaces or other characters that are open to misinterpretation by `bash`.
 	* `path/to/backups` is assumed to be relative to the home directory of `user` on the remote machine. You *can* use absolute paths (ie starting with a "/") if you wish.
 	* all directories in the path defined by `path/to/backups` must exist and be writeable by `user`.
@@ -456,50 +457,50 @@ If the *authorising computer* is another computer then it should be running the 
 ```bash
 $ rclone version
 ```
-	
+
 and perform any necessary software updates before you begin.
 
 ###### on the *authorising computer*
 
 1. Open a Terminal window and run the command:
-	
+
 	```bash
 	$ rclone authorize "dropbox"
 	```
-		
+
 2. *rclone* will do two things:
 
 	- display the following message:
-	
+
 		```
 		If your browser doesn't open automatically go to the following link:
 		    http://127.0.0.1:nnnnn/auth?state=xxxxxxxx
 		Log in and authorize rclone for access
 		Waiting for code...
 		```
-		
+
 	- attempt to open your default browser using URL in the above message. In fact, everything may happen so quickly that you might not actually see the message because it will be covered by the browser window. If, however, a browser window does not open:
-		
+
 		- copy the URL to the clipboard;
 		- launch a web browser yourself; and
 		- paste the URL into the web browser
 
 		Note:
-		
+
 		* you can't paste that URL on another machine. Don't waste time trying to replace "127.0.0.1" with a domain name or IP address of another computer. It will not work!
-	
+
 3. The browser will take you to Dropbox. Follow the on-screen instructions. If all goes well, you will see a message saying "Success".
 
 4. Close (or hide or minimise) the browser window so that you can see the Terminal window again.
 
 5. Back in the Terminal window, *rclone* will display output similar to the following:
-	
+
 	```
 	Paste the following into your remote machine --->
 	{"access_token":"gIbBeRiSh","token_type":"bearer","refresh_token":"gIbBeRiSh","expiry":"timestamp"}
 	<---End paste
 	```
-	
+
 6. Copy the JSON string (everything from and including the "{" up to and including the "}" and save it somewhere. This string is your "Dropbox Token".
 
 ###### on the Raspberry Pi
@@ -528,16 +529,16 @@ and perform any necessary software updates before you begin.
 7. Respond to the `Edit advanced config?` prompt by pressing <kbd>return</kbd> to accept the default "No" answer.
 8. Respond to the `Use auto config?` prompt by typing "n" and pressing <kbd>return</kbd>.
 9. *rclone* will display the following instructions and then wait for a response:
-	
+
 	```
 	Execute the following on the machine with the web browser (same rclone version recommended):
-	
+
 		rclone authorize "dropbox"
-	
+
 	Then paste the result below:
 	result>
 	```
-	
+
 10. Paste your "Dropbox Token" (saved as the last step taken on your *authorising computer*) and press <kbd>return</kbd>.
 
 11. Respond to the `Yes this is OK` prompt by pressing <kbd>return</kbd> to accept the default "y" answer.
@@ -549,13 +550,13 @@ and perform any necessary software updates before you begin.
 	```
 
 	The expected answer is:
-	
+
 	```
 	dropbox:
 	```
-	
+
 	where "dropbox" is the name you gave to the remote.
-	
+
 ##### about your Dropbox token
 
 The Dropbox token is stored in the `rclone` configuration file at:
@@ -565,7 +566,7 @@ The Dropbox token is stored in the `rclone` configuration file at:
 ```
 
 The token is tied to both `rclone` (the application) and your Dropbox account but it is not tied to a specific machine. You can copy the `rclone.conf` to other computers.
-	
+
 ##### test your Dropbox connection
 
 You should test connectivity like this:
@@ -575,9 +576,9 @@ You should test connectivity like this:
 	```bash
 	$ PREFIX="dropbox:path/to/backups"
 	```
-	
+
 	Notes:
-	
+
 	* the word "dropbox" is assumed to be the **name** you assigned to the remote when you ran `rclone config`. If you capitalised "Dropbox" or gave it another name like "MyDropboxAccount" then you will need to substitute accordingly. It is **case sensitive**!
 	* the right hand side (after the colon) should not contain embedded spaces or other characters that are open to misinterpretation by `bash`.
 	* `path/to/backups` is relative to top of your Dropbox structure in the cloud. You should not use absolute paths (ie starting with a "/").
@@ -590,7 +591,7 @@ You should test connectivity like this:
 	```
 
 	Unless the target folder is empty (a problem you can fix by making sure it has at least one file), you should see a list of the files in that folder on Dropbox. You can also replace `ls` with `lsd` to see a list of sub-directories in the target folder.
-	
+
 	If the command displays an error, you may need to check your work.
 
 Once you are sure your working PREFIX is correct, copy the values to the [configuration file](#configFile).
@@ -712,7 +713,7 @@ iotstack_backup_influxdb path/to/backupdir runtag {influx-backup.tar}
 	```
 
 	with *influx-backup.tar* being replaced if you supply a third argument.
-	
+
 * The resulting `.tar` file will contain a portable snapshot of all InfluxDB databases as of the moment that the script started to run.
 
 The reason for implementing this as a standalone script is to make it easier to take snapshots and/or build your own backup strategy.
@@ -743,7 +744,7 @@ iotstack_backup_nextcloud path/to/backupdir runtag {nextcloud-backup.tar.gz}
 	```
 
 	with *nextcloud-backup.tar.gz* being replaced if you supply a third argument.
-	
+
 The reason for implementing this as a standalone script is to make it easier to take snapshots and/or build your own backup strategy. Example:
 
 ```bash
@@ -809,7 +810,7 @@ iotstack_restore_general path/to/backupdir runtag {general-backup.tar.gz}
 	```
 
 	with *general-backup.tar.gz* being replaced if you supply a third argument.
-	
+
 * In both cases, *general-backup.tar.gz* (or whatever filename you supply)  is expected to be a file created by `iotstack_backup_general`. The result is undefined if this expectation is not satisfied.
 * Running `iotstack_restore_general` will restore:
 
@@ -825,7 +826,7 @@ iotstack_restore_general path/to/backupdir runtag {general-backup.tar.gz}
 	* `~/IOTstack/docker-compose.yml` in some situations.
 
 	† if you removed the matching exclusion from `iotstack_backup_general` then these directories will be restored in as-backed-up state.
-	
+
 The following files are given special handling:
 
 * `docker-compose.yml`
@@ -843,7 +844,7 @@ This is to cater for two distinct situations:
 	- `docker-compose.yml*`
 
 	will match:
-	
+
 	- `docker-compose.yml.2021-05-02_1150`
 
 	However, `iotstack_restore_general` does **not** restore any tagged compose files that are present in a backup. If you want them, you will have to unpack the backup yourself.
@@ -874,7 +875,7 @@ iotstack_restore_influxdb path/to/backupdir runtag {influx-backup.tar}
 	```
 
 	with *influx-backup.tar* being replaced if you supply a third argument.
-	
+
 * In both cases, *influx-backup.tar* (or whatever filename you supply)  is expected to be a file created by `iotstack_backup_influxdb`. The result is undefined if this expectation is not satisfied.
 * Running `iotstack_restore_influxdb` will restore the contents of a portable influx backup. The operation is treated as a "full" restore and proceeds by:
 	* ensuring the influxdb container is not running
@@ -902,7 +903,7 @@ iotstack_restore_nextcloud path/to/backupdir runtag {nextcloud-backup.tar.gz}
 	```
 
 	with *nextcloud-backup.tar.gz* being replaced if you supply a third argument.
-	
+
 * In both cases, *nextcloud-backup.tar.gz* (or whatever filename you supply) is expected to be a file created by `iotstack_backup_nextcloud`. The result is undefined if this expectation is not satisfied.
 * Running `iotstack_restore_nextcloud`:
 	* ensures the nextcloud and nextcloud_db containers are not running
@@ -923,19 +924,19 @@ iotstack_restore runtag {by_host_dir}
 	```bash
 	$ iotstack_restore 2020-09-19_1138.iot-hub
 	```
-	
+
 * *by\_host\_dir* is an _optional_ argument. If omitted, the script assumes that *runtag* matches the syntax defined at [about *runtag*](#aboutRuntag) and treats all characters to the right of the first period as the *by\_host\_dir*. For example, given the *runtag*:
 
 	```
 	2020-09-19_1138.iot-hub
 	```
-	
+
 	then *by\_host\_dir* will be:
-	
+
 	```
 	iot-hub
 	```
-	
+
 	If you pass a *runtag* which can't be parsed to extract the *by\_host\_dir* then you must also pass a valid *by\_host\_dir*.
 
 The script:
@@ -971,7 +972,7 @@ Scenario. Your SD card wears out, or your Raspberry Pi emits magic smoke, or you
 		~/.config/rclone/rclone.conf
 		~/.config/iotstack_backup/config.yml
 		```
-	
+
 2. Run `iotstack_restore` with the runtag of a recent backup. Among other things, this will recover `docker-compose.yml` (ie there is no need to run the menu and re-select your services).
 3. Bring up the stack.
 
@@ -1026,6 +1027,20 @@ The scripts will **not** protect you if you ignore this restriction. Ignoring th
 
 You are welcome to fix the scripts so that you can pass arbitrary quoted strings (eg "my backup from last tuesday") but those are **not** supported at the moment.
 
+### <a name="topdir">about `$HOME/IOTstack` assumption</a>
+
+All scripts assume that the IOTstack folder is located at the path `$HOME/IOTstack`. In most situations, that will be the absolute path:
+
+```
+/home/pi/IOTstack
+```
+
+This assumption can be overridden using the `IOTSTACK` environment variable. For example:
+
+```bash
+$ IOTSTACK=$HOME/pi/OldVersionOfIOTstack iotstack_backup_general oldversionbackup.tar.gz
+```
+
 ### <a name="aboutInfluxCommands">about InfluxDB backup and restore commands</a>
 
 When you examine the scripts, you will see that `influxd` is instructed to perform a backup like this:
@@ -1071,7 +1086,7 @@ I do it like this.
 	$ mkdir ~/Logs
 	$ touch ~/Logs/iotstack_backup.log
 	```
-	
+
 2. crontab preamble:
 
 	```
@@ -1079,21 +1094,21 @@ I do it like this.
 	HOME=/home/pi
 	PATH=/home/pi/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 	```
-	
+
 	The `PATH=` statement above assumes that the `iotstack_backup` and `iotstack_restore` scripts were installed in one of the directories in the colon-separated list on the right hand side of that statement. It is prudent to check that assumption:
-	
+
 	* Run the following command:
-	
+
 		```bash
 		$ which iotstack_backup
 		```
-		
+
 		You ran this command earlier at [Download repository](#downloadRepository) to confirm that the scripts had been installed where Raspberry Pi OS could find them. This time, you should **not** get silence but should, instead, get an answer like:
-		
+
 		```
 		/home/pi/.local/bin/iotstack_backup
 		```
-		
+
 	* Copy the entire `PATH` statement to the clipboard, then paste it into your terminal window and run it. For example:
 
 		```bash
@@ -1107,20 +1122,20 @@ I do it like this.
 		```
 
 		then you will need to add the `/home/pi/bin` installation directory to the top of the `PATH` statement in your crontab, as in:
-		
+
 		```
 		PATH=/home/pi/bin:/home/pi/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 		```
 
 	* Any time you change your PATH to perform a test (as you did two steps back), it is a good idea to logout and login again to get it back to normal.
-	
+
 3. crontab entry:
 
 	```
 	# backup Docker containers and configurations once per day at 11:00am
 	00	11	*	*	*	iotstack_backup >>./Logs/iotstack_backup.log 2>&1
 	```
-	
+
 	See [crontab.guru](https://crontab.guru/#00_11_*_*_*) if you want to understand the syntax of the last line.
 
 The completed `crontab` would look like this:
@@ -1141,9 +1156,9 @@ If you are unsure about how to set up a `crontab`:
 	```bash
 	$ crontab -l
 	```
-	
+
 	The command will either display your `crontab` or report:
-	
+
 	```
 	no crontab for pi
 	```
@@ -1151,29 +1166,29 @@ If you are unsure about how to set up a `crontab`:
 2. Irrespective of whether you have an existing `crontab` or not, you can:
 
 	* ***Either*** – edit your `crontab` in-situ via this command:
-	
+
 		```bash
 		$ crontab -e
 		```
-	
+
  		This will use the value of your `EDITOR` environment variable (if you have set it) or offer choice of editors. It will initialise a new `crontab` if you did not have one before.
- 		
+ 
  	* ***Or*** – prepare your `crontab` as a separate file (eg "my-crontab.txt") and import it:
 
 		```bash
 		$ crontab my-crontab.txt
 		```
-	
+
 		This method always replaces any existing `crontab`.
-	
+
 	* ***Or*** – combine the two methods. First, if you have an existing `crontab`, export it to a file:
-	
+
 		```bash
 		$ crontab -l >my-crontab.txt
 		```
-			
+
 		Edit the "my-crontab.txt" file, and finish by re-importing the edited file:
-			
+
 		```bash
 		$ crontab my-crontab.txt
 		```

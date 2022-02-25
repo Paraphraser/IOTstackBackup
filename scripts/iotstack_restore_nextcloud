@@ -39,7 +39,7 @@ if [ ! -e "$RESTORE_TAR_GZ" ] ; then
 fi
 
 # assumptions
-IOTSTACK="$HOME/IOTstack"
+IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
 COMPOSENAME="docker-compose.yml"
 COMPOSE="$IOTSTACK/$COMPOSENAME"
 VOLUMES="$IOTSTACK/volumes"
