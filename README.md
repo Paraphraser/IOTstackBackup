@@ -1038,7 +1038,7 @@ All scripts assume that the IOTstack folder is located at the path `$HOME/IOTsta
 This assumption can be overridden using the `IOTSTACK` environment variable. For example:
 
 ```bash
-$ IOTSTACK=$HOME/pi/OldVersionOfIOTstack iotstack_backup_general oldversionbackup.tar.gz
+$ IOTSTACK=$HOME/OldVersionOfIOTstack iotstack_backup_general oldversionbackup.tar.gz
 ```
 
 ### <a name="aboutInfluxCommands">about InfluxDB backup and restore commands</a>
@@ -1091,7 +1091,6 @@ I do it like this.
 
 	```
 	SHELL=/bin/bash
-	HOME=/home/pi
 	PATH=/home/pi/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 	```
 
@@ -1142,7 +1141,6 @@ The completed `crontab` would look like this:
 
 ```
 SHELL=/bin/bash
-HOME=/home/pi
 PATH=/home/pi/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # backup Docker containers and configurations once per day at 11:00am
