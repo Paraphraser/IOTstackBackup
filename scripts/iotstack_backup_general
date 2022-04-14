@@ -81,7 +81,7 @@ done
 # (note - temporary file created in RAM)
 BACKUP_EXCLUDE="$(mktemp -p /dev/shm/)"
 cat <<-EXCLUSIONS >"$BACKUP_EXCLUDE"
-./volumes/influxdb/*
+./volumes/influxdb*/*
 ./volumes/mariadb/*
 ./volumes/nextcloud/*
 ./volumes/postgres/*
