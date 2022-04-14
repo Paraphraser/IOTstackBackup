@@ -100,6 +100,9 @@ echo "CLOUD_METHOD = $CLOUD_METHOD"
 echo "CLOUD_PREFIX = $CLOUD_PREFIX"
 echo "  CLOUD_PATH = $CLOUD_PATH"
 
+# record images in use (ukkopahis suggestion on Discord)
+docker image ls --all --digests --no-trunc
+
 # perform the general backup
 iotstack_backup_general "$BACKUPSDIR" "$RUNTAG"
 
