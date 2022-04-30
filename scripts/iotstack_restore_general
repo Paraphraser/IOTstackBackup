@@ -6,6 +6,9 @@
 # support user renaming of script
 SCRIPT=$(basename "$0")
 
+# snapshot the time
+RUNDATE=$(date +"%Y-%m-%d_%H%M")
+
 # the default name and correct extension type is
 DEFAULTFILENAME="general-backup.tar.gz"
 
@@ -99,6 +102,12 @@ if [ -d "$SERVICESRESTOREDIR" ] ; then
 
    done
 
+   # ensure services owned by current user
+   sudo chown -R "$USER:$USER" "$SERVICESROOT"
+   
+   # done with this directory
+   sudo rm -rf "$SERVICESRESTOREDIR"
+
 fi
 
 # was a "volumes" directory restored?
@@ -121,49 +130,50 @@ if [ -d "$VOLUMESRESTOREDIR" ] ; then
 
    done
 
+   # done with this directory
+   sudo rm -rf "$VOLUMESRESTOREDIR"
+
 fi
 
-# iterate the docker-compose prefixes (prefixes used for consistency with backup script)
-for COMPOSEPREFIX in "docker-compose" "docker-compose-override" "compose-override" ; do
+# restore whatever remains into ~/IOTstack
+for SPATH in "$RESTOREDIR"/* "$RESTOREDIR"/.*; do
 
-   # append the extension to the prefix
-   COMPOSENAME="$COMPOSEPREFIX.yml"
+   # is the inclusion a file (filters . .. and other junk)
+   if [ -f "$SPATH" ] ; then
 
-   # source file in the backup is
-   SOURCE="$RESTOREDIR/$COMPOSENAME"
+      SNAME=$(basename "$SPATH")
+      DPATH="$IOTSTACK/$SNAME"
 
-   # the target is
-   TARGET="$IOTSTACK/$COMPOSENAME"
+      # does the destination exist?
+      if [ -e "$DPATH" ] ; then
 
-   # was that file included in the restore?
-   if [ -e "$SOURCE" ] ; then
+         # yes! compare the two files
+         cmp "$SPATH" "$DPATH" >/dev/null 2>&1
 
-      # yes! does the target already exist?
-      if [ -e "$TARGET" ] ; then
-
-         # yes! compare restored with in-situ
-         cmp "$SOURCE" "$TARGET"
-
-         # compare same?
+         # do the two files compare same?
          if [ $? -ne 0 ] ; then
 
-             # no! leave in-situ alone but move the restored version
-             # into place with a tag
-             TARGET="$TARGET".$(date +"%Y-%m-%d_%H%M")
-             echo "Restoring $COMPOSENAME as $TARGET"
-             mv "$SOURCE" "$TARGET"
+             # no! move the restored version into place with a tag
+             echo "Restoring $SNAME as $SNAME.$RUNDATE"
+             mv "$SPATH" "$DPATH.$RUNDATE"
+
+             # ensure owned by current user
+             sudo chown "$USER:$USER" "$DPATH.$RUNDATE"
 
          else
 
-             echo "$COMPOSENAME already exists and compares same - skipped"
+             echo "$SNAME already exists and compares same - skipped"
 
          fi
 
       else
 
          # no! move the restored version into place
-         echo "Restoring $COMPOSENAME"
-         mv "$SOURCE" "$TARGET"
+         echo "Restoring $SNAME"
+         mv "$SPATH" "$DPATH"
+
+         # ensure owned by current user
+         sudo chown "$USER:$USER" "$DPATH"
 
       fi
 

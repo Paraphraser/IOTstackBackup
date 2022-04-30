@@ -68,19 +68,17 @@ for INCLUDE in $(cat $BACKUP_INCLUDE); do
    fi
 done
 
-# add all docker-compose files in directory-relative form
-for COMPOSEPREFIX in "docker-compose" "docker-compose-override" "compose-override" ; do
-   for INCLUDE in "$IOTSTACK/$COMPOSEPREFIX.yml"* ; do
-      if [ -e "$INCLUDE" ] ; then
-         echo "."/$(basename "$INCLUDE") >> "$BACKUP_INCLUDE"
-      fi
-   done
+# add all *.yml *.env and .env in directory-relative form
+# (this will capture mkdocs.yml)
+for INCLUDE in "$IOTSTACK"/*.yml "$IOTSTACK"/*.env "$IOTSTACK"/.env ; do
+   echo "."/$(basename "$INCLUDE") >> "$BACKUP_INCLUDE"
 done
 
 # define files/folders to be excluded from the backup
 # (note - temporary file created in RAM)
 BACKUP_EXCLUDE="$(mktemp -p /dev/shm/)"
 cat <<-EXCLUSIONS >"$BACKUP_EXCLUDE"
+./mkdocs.yml
 ./volumes/influxdb*/*
 ./volumes/mariadb/*
 ./volumes/nextcloud/*
