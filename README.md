@@ -231,13 +231,13 @@ Make sure your system satisfies the following dependencies:
 ```bash
 $ sudo apt install -y rsync python3-pip python3-dev
 $ curl https://rclone.org/install.sh | sudo bash
-$ sudo pip3 install -U niet
+$ sudo pip3 install -U shyaml
 ```
 
 Some (or all) may be installed already on your Raspberry Pi. Some things to note:
 
 1. You can also install *rclone* via `sudo apt install -y rclone` but you get an obsolete version. It is better to use the method shown here.
-2. *niet* is a YAML parser (analogous to *jq* for JSON files).
+2. *shyaml* is a YAML parser (analogous to *jq* for JSON files).
 
 ### <a name="configFile"> The configuration file </a>
 
@@ -622,12 +622,12 @@ restore:
 You can use the following command to check your [configuration file](#configFile): 
 
 ```bash
-$ show_iotstack_configuration
+$ show_iotstackbackup_configuration
 ```
 
 The script will:
 
-* fail if the `niet` dependency is not installed.  
+* fail if the `shyaml` dependency is not installed.  
 * warn you if it can't find the configuration file.
 * report "Element not found" against a field if it can't find an expected key in the configuration file.
 * return nothing (or a traceback) if the configuration file is malformed.

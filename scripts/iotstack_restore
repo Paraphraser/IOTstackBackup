@@ -44,13 +44,18 @@ if [ $USAGE -ne 0 ] ; then
    exit -1
 fi
 
+if [ -z "$(which shyaml)" ] ; then
+   echo "Please re-run install_scripts.sh and follow the instructions to install \"shyaml\"."
+   exit -1
+fi
+
 # the configuration file is at
 CONFIG_YML="$HOME/.config/iotstack_backup/config.yml"
 
 # does the configuration file exist?
 if [ -e "$CONFIG_YML" ] ; then
-   CLOUD_METHOD=$(niet -s .restore.method "$CONFIG_YML") ;
-   CLOUD_PREFIX=$(niet -s .restore.prefix "$CONFIG_YML") ;
+   CLOUD_METHOD=$(shyaml get-value restore.method  < "$CONFIG_YML")
+   CLOUD_PREFIX=$(shyaml get-value restore.prefix  < "$CONFIG_YML")
 else
    echo "Warning: Configuration file not found: $CONFIG_YML"
 fi
