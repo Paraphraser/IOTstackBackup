@@ -33,13 +33,27 @@ else
 
 fi
 
+# check apt-installable dependencies
+for D in curl jq wget ; do
+   if [ -z "$(which "$D")" ] ; then
+      echo ""
+      echo "=========================================================================="
+      echo "IOTstackBackup depends on \"$D\" which does not seem to be installed on your"
+      echo "system. Please run the following command:"
+      echo ""
+      echo "   sudo apt install $D"
+      echo ""
+      echo "=========================================================================="
+   fi
+done
+
 # check if shyaml is installed
 if [ -z "$(which shyaml)" ] ; then
 
    echo ""
    echo "=========================================================================="
-   echo "\"iotstack_backup\" and \"iotstack_restore\" depend on \"shyaml\" which does not"
-   echo "seem to be installed on your system. Please run the following command:"
+   echo "IOTstackBackup depends on \"shyaml\" which does not seem to be installed on your"
+   echo "system. Please run the following command:"
    echo ""
    echo "   sudo pip3 install -U shyaml"
    echo ""
