@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
+# support user renaming of script
+SCRIPT=$(basename "$0")
+
 # should not run as root
-[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
+[ "$EUID" -eq 0 ] && echo "$SCRIPT should NOT be run using sudo" && exit -1
 
 # the configuration file is at
 CONFIG_YML="$HOME/.config/iotstack_backup/config.yml"
