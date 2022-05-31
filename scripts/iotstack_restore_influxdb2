@@ -8,9 +8,8 @@ SCRIPT=$(basename "$0")
 
 # assumptions that can be overridden
 IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
-CONTAINER="${CONTAINER:-"influxdb"}"
-# default filename hard-coded for backwards compatibility
-DEFAULTFILENAME=${DEFAULTFILENAME:-"influx-backup.tar"}
+CONTAINER="${CONTAINER:-"influxdb2"}"
+DEFAULTFILENAME=${DEFAULTFILENAME:-"$CONTAINER-backup.tar"}
 
 # the project name is the all-lower-case form of the folder name
 PROJECT=$(basename ${IOTSTACK,,})
@@ -57,10 +56,8 @@ fi
 # assumptions
 COMPOSENAME="docker-compose.yml"
 COMPOSE="$IOTSTACK/$COMPOSENAME"
-BACKUPS="$IOTSTACK/backups"
-INFLUXBACKUP="$BACKUPS/$CONTAINER"
-INFLUXBACKUPDB="$INFLUXBACKUP/db"
-INFLUXDATA="$IOTSTACK/volumes/$CONTAINER/data"
+INFLUXSTORE="$IOTSTACK/volumes/$CONTAINER"
+INFLUXBACKUP="$INFLUXSTORE/backup"
 
 # check the key assumptions
 if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
@@ -71,58 +68,40 @@ if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
    exit -1
 fi
 
-# check that influxdb is not running
+# check that the container is not running
 if isContainerRunning "$CONTAINER" ; then
    echo "Error: $CONTAINER should NOT be running at the start of a restore."
    echo "       Please deactivate and try again."
    exit -1
 fi
 
-# make sure the backups directory exists & has correct ownership & mode
-[ -d "$BACKUPS" ] || mkdir -m 755 -p "$BACKUPS"
-[ $(stat -c "%U:%G" "$BACKUPS") = "$USER:$USER" ] || sudo chown $USER:$USER "$BACKUPS"
-[ $(stat -c "%a" "$BACKUPS") = "755" ] || sudo chmod 755 "$BACKUPS"
-
-# make sure the influx backup directory exists & has correct ownership & mode
-[ -d "$INFLUXBACKUPDB" ] || sudo mkdir -m 755 -p "$INFLUXBACKUPDB"
-[ $(stat -c "%U:%G" "$INFLUXBACKUP") = "root:root" ] || sudo chown -R root:root "$INFLUXBACKUP"
-[ $(stat -c "%a" "$INFLUXBACKUP") = "755" ] || sudo chmod -R 755 "$INFLUXBACKUP"
-
 # now we can begin
 echo "----- Starting $SCRIPT at $(date) -----"
 
-# the influx backup directory needs to be empty
-if [ $(ls -1 "$INFLUXBACKUPDB" | wc -l) -gt 0 ] ; then
-   echo "Erasing $INFLUXBACKUPDB"
-   sudo rm "$INFLUXBACKUPDB"/*
-fi
+# the whole persistent store for influxdb2 should be erased
+echo "Erasing $INFLUXSTORE"
+sudo rm -rf "$INFLUXSTORE"
 
-# does the influx data root exist?
-if [ -d "$INFLUXDATA" ] ; then
-
-   # yes! it and its contents need to be erased
-   echo "Erasing $INFLUXDATA"
-   sudo rm -r "$INFLUXDATA"
-
-fi
+# re-create the top level directory
+sudo mkdir -p "$INFLUXSTORE"
 
 # unpack the restore tar
 echo "unpacking $RESTORE_TAR"
-sudo tar -x --same-owner -f "$RESTORE_TAR" -C "$INFLUXBACKUPDB"
+sudo tar -x --same-owner -f "$RESTORE_TAR" -C "$INFLUXSTORE"
 
 # bring up the influxdb container (done early to give time to start)
 echo "activating $CONTAINER (temporarily)"
 docker-compose -f "$COMPOSE" up -d "$CONTAINER"
 
-# wait for influx to be ready
-while ! docker exec "$CONTAINER" curl -s "http://localhost:8086" >/dev/null 2>&1 ; do
+# wait for the container to be ready
+while ! docker exec "$CONTAINER" influx ping >/dev/null 2>&1 ; do
    echo "waiting for $CONTAINER to become ready"
    sleep 1
 done
 
 # tell influx to perform the restore
-echo "Telling influxd to restore a portable backup"
-docker exec "$CONTAINER" influxd restore -portable /var/lib/influxdb/backup
+echo "Telling $CONTAINER to restore a backup"
+docker exec "$CONTAINER" influx restore /var/lib/backup --full
 
 # take down influxdb
 echo "deactivating $CONTAINER"

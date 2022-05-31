@@ -8,9 +8,8 @@ SCRIPT=$(basename "$0")
 
 # assumptions that can be overridden
 IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
-CONTAINER=${CONTAINER:-"influxdb"}
-# default filename hard-coded for backwards compatibility
-DEFAULTFILENAME=${DEFAULTFILENAME:-"influx-backup.tar"}
+CONTAINER=${CONTAINER:-"influxdb2"}
+DEFAULTFILENAME=${DEFAULTFILENAME:-"$CONTAINER-backup.tar"}
 
 # the project name is the all-lower-case form of the folder name
 PROJECT=$(basename ${IOTSTACK,,})
@@ -57,25 +56,22 @@ fi
 # assumptions
 COMPOSENAME="docker-compose.yml"
 COMPOSE="$IOTSTACK/$COMPOSENAME"
-BACKUPS="$IOTSTACK/backups"
-INFLUXBACKUP="$BACKUPS/$CONTAINER"
-INFLUXBACKUPDB="$INFLUXBACKUP/db"
+INFLUXSTORE="$IOTSTACK/volumes/$CONTAINER"
+INFLUXBACKUP="$INFLUXSTORE/backup"
+INFLUXENGINE="./data/engine"
 
-# is influxdb running?
+# is influxdb2 running?
 if ! isContainerRunning "$CONTAINER" ; then
    echo "Warning: $CONTAINER container not running - backup skipped"
    exit 0
 fi
 
-# make sure the backups directory exists & has correct ownership & mode
-[ -d "$BACKUPS" ] || mkdir -m 755 -p "$BACKUPS"
-[ $(stat -c "%U:%G" "$BACKUPS") = "$USER:$USER" ] || sudo chown $USER:$USER "$BACKUPS"
-[ $(stat -c "%a" "$BACKUPS") = "755" ] || sudo chmod 755 "$BACKUPS"
-
-# make sure the influx backup directory exists & has correct ownership & mode
-[ -d "$INFLUXBACKUPDB" ] || sudo mkdir -m 755 -p "$INFLUXBACKUPDB"
-[ $(stat -c "%U:%G" "$INFLUXBACKUP") = "root:root" ] || sudo chown -R root:root "$INFLUXBACKUP"
-[ $(stat -c "%a" "$INFLUXBACKUP") = "755" ] || sudo chmod -R 755 "$INFLUXBACKUP"
+# docker-compose should have created the path to the backup directory
+if [ ! -d "$INFLUXBACKUP" ] ; then
+   echo "$INFLUXBACKUP does not exist. This is usually created by docker-compose."
+   echo "Has InfluxDB 2 been initialised properly?"
+   exit -1
+fi
 
 # now we can begin
 echo "----- Starting $SCRIPT at $(date) -----"
@@ -84,21 +80,22 @@ echo "----- Starting $SCRIPT at $(date) -----"
 touch "$BACKUP_TAR"
 
 # the influx backup directory needs to be empty
-if [ $(ls -1 "$INFLUXBACKUPDB" | wc -l) -gt 0 ] ; then
-   echo "Erasing $INFLUXBACKUPDB"
-   sudo rm "$INFLUXBACKUPDB"/*
+if [ $(ls -1 "$INFLUXBACKUP" | wc -l) -gt 0 ] ; then
+   echo "Erasing $INFLUXBACKUP"
+   sudo rm "$INFLUXBACKUP"/*
 fi
 
 # tell influx to perform the backup
-echo "Telling influxd to create a portable backup"
-docker exec "$CONTAINER" influxd backup -portable /var/lib/influxdb/backup
+echo "Telling InfluxDB 2 to create a backup"
+docker exec "$CONTAINER" influx backup /var/lib/backup
 
 # sweep the backup into a tar (sudo is needed because backup files are
 # created with owner root, group root, mode 600)
 echo "Collecting the backup files into a tar"
 sudo tar \
 	-cf "$BACKUP_TAR" \
-	-C "$INFLUXBACKUPDB" \
+	-C "$INFLUXSTORE" \
+	--exclude="$INFLUXENGINE" \
 	.
 
 # report size of archive

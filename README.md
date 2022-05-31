@@ -2,91 +2,101 @@
 
 This project documents my approach to backup and restore of [SensorsIot/IOTstack](https://github.com/SensorsIot/IOTstack). My design goals were:
 
-1. Avoid the double-compression implicit in the official backup scripts:
+1. Live backup:
 
-	* An InfluxDB portable backup produces .tar.gz files. Simply collecting those into a separate .tar is more efficient than recompressing them into a .tar.gz.
+	* I see no sense in a backup strategy which only works when the stack is down.
 
-2. Provide a variety of post-backup methods to copy backup files from a "live" Raspberry Pi to another machine on the local network and/or to the cloud. With appropriate choices, three levels of backup are possible:
+2. Avoid the double-compression implicit in the scripts supplied with [SensorsIot/IOTstack](https://github.com/SensorsIot/IOTstack):
 
-	* Recent backups are stored on the "live" RPi in `~/IOTstack/backups/`
+	* An InfluxDB backup produces .tar.gz files. This is true for both InfluxDB&nbsp;1.8 and InfluxDB&nbsp;2. Simply collecting those into a separate .tar is more efficient than recompressing them into a .tar.gz.
+
+3. Provide a variety of post-backup methods to copy backup files from a "live" Raspberry Pi to another machine on the local network and/or to the cloud. With appropriate choices, three levels of backup are possible:
+
+	* Recent backups are stored on the Raspberry Pi in `~/IOTstack/backups/`
 	* On-site copies are stored on another machine on the local network
 	* Off-site copies are stored in the cloud (eg Dropbox).
 
-3. More consistent and `cron`-friendly logging of whatever was written to `stdout` and `stderr` as the backup script ran.
-4. Efficient restore of a backup, including in a "bare-metal" restore.
+4. More consistent and cron-friendly logging of whatever was written to `stdout` and `stderr` as the backup script ran.
+6. Efficient restore of a backup, including a "bare-metal" restore:
 
-My scripts may or may not be directly useful in your situation. They are intended less as a drop-in replacement for the official backup script than they are as an example of an approach you might consider and adapt to your own needs.
+	* When I first developed these scripts, there was no equivalent for [`iotstack_restore`](#iotstackRestore) in [SensorsIot/IOTstack](https://github.com/SensorsIot/IOTstack). That was a gap I wanted to rectify. 
 
-In particular, these scripts will never be guaranteed to cover the full gamut of container types supported by [SensorsIot/IOTstack](https://github.com/SensorsIot/IOTstack).
+These scripts will never be *guaranteed* to cover the full gamut of container types supported by [SensorsIot/IOTstack](https://github.com/SensorsIot/IOTstack). The main problem lies with containers where it is unsafe to copy the container's persistent storage while the container is running. This mainly applies to database engines. The support matrix is:
 
-The scripts *should* work "as is" with any container type that can be backed-up safely by copying the contents of its `volumes` directory _while the container is running_. I call this the ***copy-safe*** property.
-
-Databases (other than SQLite) are the main exception. Like the official backup script upon which it is based, `iotstack_backup` handles `InfluxDB` properly, omits `postgres` and `mariadb` entirely, and completely ignores the problem for any container which is not *copy-safe*.
-
-When I first developed these scripts, there was no equivalent for `iotstack_restore` in [SensorsIot/IOTstack](https://github.com/SensorsIot/IOTstack). That was a gap I wanted to rectify. Running my `iotstack_restore` replaces the contents of the `services` and `volumes` directories, then restores the `InfluxDB` and `nextcloud` databases. Fairly obviously, `postgres` and `mariadb` will be absent but any other non-*copy-safe* container may well be in a damaged state.
-
-If you are running any container type which is not *copy-safe*, it is up to you to come up with an appropriate solution. Most database packages have their own backup & restore mechanisms. It is just a matter of working out what those are, how to implement them in a Docker environment, and then bolting that into your backup/restore scripts.
-
-**Please note:**
-
-* The InfluxDB backup service provided by this repo is for Influx 1.8. I have **not** tested with Influx 2.0.
+non-copy-safe container  | supported
+-------------------------|:---------:
+InfluxDB 1.8             | yes
+InfluxDB 2               | yes
+MariaDB                  | yes
+Nextcloud + Nextcloud_DB | yes
+Postgres                 | no
+Subversion               | no
 
 ## Contents
 
 - [Setup](#setup)
+
 	- [Download repository](#downloadRepository)
-	- [Preparing for Nextcloud backups](#nextcloudPreparation)
+	- [Preparing for Nextcloud and MariaDB backups](#nextcloudMariaDBprep)
+	- [Preparing for InfluxDB 2 backups](#influxDB2prep)
 	- [Install dependencies](#installDependencies)
 	- [The configuration file](#configFile)
-		- [method: ](#keyMethod)
-		- [prefix: ](#keyPrefix)
-		- [retain: ](#keyRetain)
+
+		- [method:](#keyMethod)
+		- [prefix:](#keyPrefix)
+		- [retain:](#keyRetain)
+
 	- [Choose your backup and restore methods](#chooseMethods)
+
 		- [*scp*](#scpOption)
 		- [*rsync*](#rsyncOption)
 		- [*rclone* (Dropbox)](#rcloneOption)
 		- [mix and match](#mixnmatch)
+
 	- [Check your configuration](#configCheck)
+
+- [Reference tables](#referenceTables)
+
+	- [Table 1: assumed backup file extensions](#refExtensions)
+	- [Table 2: default backup file names](#refFilenames)
+	- [Table 3: associated containers](#refContainers)
+
 - [The backup side of things](#backupSide)
+
+	- [iotstack\_backup (umbrella script)](#iotstackBackup)
 	- [iotstack\_backup\_general](#iotstackBackupGeneral)
-	- [iotstack\_backup\_influxdb](#iotstackBackupInfluxdb)
-	- [iotstack\_backup\_nextcloud](#iotstackBackupNextcloud)
-	- [iotstack\_backup](#iotstackBackup)
+	- [iotstack\_backup\_*«container»*](#iotstackBackupContainer)
+
 - [The restore side of things](#restoreSide)
+
+	- [iotstack\_restore (umbrella script)](#iotstackRestore)
 	- [iotstack\_restore\_general](#iotstackRestoreGeneral)
-	- [iotstack\_restore\_influxdb](#iotstackRestoreInfluxdb)
-	- [iotstack\_restore\_nextcloud](#iotstackRestoreNextcloud)
-	- [iotstack\_restore](#iotstackRestore)
+	- [iotstack\_restore\_*«container»*](#iotstackRestoreContainer)
+
 - [Bare-metal restore](#bareMetalRestore)
-- [iotstack\_reload\_influxdb](#iotstackReloadInfluxdb)
+- [Environment variables](#envVars)
+- [Reloading Influx databases "in situ"](#iotstackReloadInflux)
 - [Notes](#endNotes)
-	- [about *runtag*](#aboutRuntag)
-	- [about `$HOME/IOTstack` assumption](#topdir)
-	- [about InfluxDB backup and restore commands](#aboutInfluxCommands)
-	- [about InfluxDB database restoration](#aboutInfluxRestore)
+
+	- [about «runtag»](#aboutRuntag)
 	- [if Nextcloud gets stuck in "maintenance mode"](#nextcloudMaintenanceMode)
 	- [using cron to run iotstack\_backup](#usingcron)
+
+		- [understanding logging when cron is involved](#cronLogging)
+
 	- [periodic maintenance](#periodicMaintenance)
 
-## <a name="setup"> Setup </a>
+## <a name="setup"></a>Setup
 
-### <a name="downloadRepository"> Download repository </a>
+### <a name="downloadRepository"></a>Download repository
 
-Strictly speaking, this repository can be cloned anywhere on your Raspberry Pi. However, I recommend the `~/.local` directory:
+This repository can be cloned anywhere on your Raspberry Pi but I recommend the `~/.local` directory:
 
 ```bash
 $ mkdir -p ~/.local
 $ cd ~/.local
 $ git clone https://github.com/Paraphraser/IOTstackBackup.git IOTstackBackup
-$ ./IOTstackBackup/install_scripts.sh
-```
-
-If you have previously downloaded the repository, bring it up-to-date against GitHub:
-
-```bash
-$ cd ~/.local/IOTstackBackup
-$ git checkout master
-$ git pull
+$ cd IOTstackBackup
 $ ./install_scripts.sh
 ```
 
@@ -94,6 +104,7 @@ Notes:
 
 * If `~/.local/bin` already exists, the scripts are copied into it.
 * If `~/.local/bin` does not exist, the Unix PATH is searched for an alternative directory that is under your home directory. If the search:
+
 	- *succeeds*, the scripts are copied into that directory
 	- *fails*, `~/.local/bin` is created and the scripts are copied into it.
 
@@ -113,9 +124,9 @@ or get "silence". If `which` does not return a path, try logging-out and in agai
 
 > There are many reasons why a folder like `~/.local/bin` might not be in your search path. It is beyond the scope of this document to explore all the possibilities. Google is your friend.
 
-### <a name="nextcloudPreparation"> Preparing for Nextcloud backups</a>
+### <a name="nextcloudMariaDBprep"></a>Preparing for Nextcloud and MariaDB backups
 
-Nextcloud backup and restore was introduced in September 2021. It has several dependencies on IOTstack which you should check before your first run.
+Nextcloud backup and restore was introduced in September 2021; MariaDB in May 2022. Both have several dependencies on IOTstack which you should check before your first backup run.
 
 1. Make sure your local copy of the IOTstack repository is fully up-to-date:
 
@@ -135,101 +146,149 @@ Nextcloud backup and restore was introduced in September 2021. It has several de
 		$ git pull
 		```
 
-2. List Nextcloud's reference service definition:
+2. List the reference service definitions:
 
-	```bash
-	$ cat ~/IOTstack/.templates/nextcloud/service.yml
-	```
+	* Nextcloud
 
-	At the time of writing, the new menu version it looked like this:
+		```bash
+		$ cat ~/IOTstack/.templates/nextcloud/service.yml
+		```
 
-	```yaml
-	nextcloud:
-	  container_name: nextcloud
-	  image: nextcloud
-	  restart: unless-stopped
-	  environment:
-	    - MYSQL_HOST=nextcloud_db
-	    - MYSQL_PASSWORD=%randomMySqlPassword%
-	    - MYSQL_DATABASE=nextcloud
-	    - MYSQL_USER=nextcloud
-	  ports:
-	    - "9321:80"
-	  volumes:
-	    - ./volumes/nextcloud/html:/var/www/html
-	  depends_on:
-	    - nextcloud_db
-	  networks:
-	    - iotstack_nw
-	    - nextcloud_internal
+		At the time of writing, the new menu version it looked like this:
 
-	nextcloud_db:
-	  container_name: nextcloud_db
-	  build: ./.templates/mariadb/.
-	  restart: unless-stopped
-	  environment:
-	    - TZ=Etc/UTC
-	    - PUID=1000
-	    - PGID=1000
-	    - MYSQL_ROOT_PASSWORD=%randomPassword%
-	    - MYSQL_PASSWORD=%randomMySqlPassword%
-	    - MYSQL_DATABASE=nextcloud
-	    - MYSQL_USER=nextcloud
-	  ports:
-	    - "9322:3306"
-	  volumes:
-	    - ./volumes/nextcloud/db:/config
-	    - ./volumes/nextcloud/db_backup:/backup
-	  networks:
-	    - nextcloud_internal
-	```
+		```yaml
+		nextcloud:
+		  container_name: nextcloud
+		  image: nextcloud
+		  restart: unless-stopped
+		  environment:
+		    - MYSQL_HOST=nextcloud_db
+		    - MYSQL_PASSWORD=%randomMySqlPassword%
+		    - MYSQL_DATABASE=nextcloud
+		    - MYSQL_USER=nextcloud
+		  ports:
+		    - "9321:80"
+		  volumes:
+		    - ./volumes/nextcloud/html:/var/www/html
+		  depends_on:
+		    - nextcloud_db
+		  networks:
+		    - default
+		    - nextcloud
 
-	The old-menu version is similar, save that it:
+		nextcloud_db:
+		  container_name: nextcloud_db
+		  build: ./.templates/mariadb/.
+		  restart: unless-stopped
+		  environment:
+		    - TZ=Etc/UTC
+		    - PUID=1000
+		    - PGID=1000
+		    - MYSQL_ROOT_PASSWORD=%randomPassword%
+		    - MYSQL_PASSWORD=%randomMySqlPassword%
+		    - MYSQL_DATABASE=nextcloud
+		    - MYSQL_USER=nextcloud
+		  volumes:
+		    - ./volumes/nextcloud/db:/config
+		    - ./volumes/nextcloud/db_backup:/backup
+		  networks:
+		    - nextcloud
+		```
 
-	* omits references to `networks:`; and
-	* uses fixed passwords.
+		The old-menu version is similar, save that it uses fixed passwords instead of "%" delimited placeholders.
 
-3. Compare and contrast your existing service definition for `nextcloud` and its database, and make appropriate adjustments.
+	* MariaDB
 
-	**Key point**:
+		```bash
+		$ cat ~/IOTstack/.templates/nextcloud/service.yml
+		```
 
-	* IOTstackBackup assumes this service definition structure and will probably fail if you change the relationship between the `nexcloud` and `nextcloud_db` containers.
+		At the time of writing, the new menu version it looked like this:
 
-4. Run the following command:
+		```yaml
+		mariadb:
+		  build: ./.templates/mariadb/.
+		  container_name: mariadb
+		  environment:
+		    - TZ=Etc/UTC
+		    - PUID=1000
+		    - PGID=1000
+		    - MYSQL_ROOT_PASSWORD=%randomAdminPassword%
+		    - MYSQL_DATABASE=default
+		    - MYSQL_USER=mariadbuser
+		    - MYSQL_PASSWORD=%randomPassword%
+		  volumes:
+		    - ./volumes/mariadb/config:/config
+		    - ./volumes/mariadb/db_backup:/backup
+		  ports:
+		    - "3306:3306"
+		  restart: unless-stopped
+		```
 
-	```bash
-	$ docker ps --format "table {{.Names}}\t{{.RunningFor}}\t{{.Status}}" --filter name=nextcloud_db
-	```
+		The old-menu version is similar, save that the environment variables are stored in a separate file.
 
-	The expected output is:
+3. Compare and contrast the reference service definitions above with those in your compose file and make appropriate adjustments. In general, you should adopt the reference versions and add your own environment variables.
 
-	```
-	NAMES          CREATED         STATUS
-	nextcloud_db   «time period»   Up «time period» (healthy)
-	```
+4. Start the container(s) and run the following commands:
+
+	* Nextcloud
+
+		```bash
+		$ docker ps --format "table {{.Names}}\t{{.RunningFor}}\t{{.Status}}" --filter name=nextcloud_db
+		```
+
+		The expected output is:
+
+		```
+		NAMES          CREATED         STATUS
+		nextcloud_db   «time period»   Up «time period» (healthy)
+		```
+
+	* MariaDB
+
+		```bash
+		$ docker ps --format "table {{.Names}}\t{{.RunningFor}}\t{{.Status}}" --filter name=mariadb
+		```
+
+		The expected output is:
+
+		```
+		NAMES          CREATED         STATUS
+		mariadb        «time period»   Up «time period» (healthy)
+		```
 
 	Notice the "healthy" annotation. If the container has only just started, you might also see "(health: starting)". Both of those are indications that a "health check" process is running inside the container.
 
-	The `iotstack_restore_nextcloud` script depends on the availability of the health check process.
+	The IOTstackBackup scripts depend on the availability of the health check process.
 
-	The health check process for MariaDB containers was added to IOTstack on 2021-10-17. If you do **not** see evidence that your instance of `nextcloud_db` is running its health check process, you probably need to rebuild your `nextcloud_db` instance, like this:
+	The health check process for MariaDB containers was added to IOTstack on 2021-10-17. If you do **not** see evidence that your containers are running their health checks, you probably need to rebuild either or both, like this:
 
 	```bash
 	$ cd ~/IOTstack
-	$ docker-compose -f build --no-cache --pull nextcloud_db
-	$ docker-compose up -d nextcloud_db
+	$ docker-compose build --no-cache --pull «container»
+	$ docker-compose up -d «container»
 	```
+
+	where:
+
+	* *«container»* is either `nextcloud_db` or `mariadb`.
 
 	Note:
 
 	* This assumes you did Step 1 (the `git pull` to bring your local copy of the IOTstack repository is fully up-to-date).
 
-### <a name="installDependencies"> Install dependencies </a>
+### <a name="influxDB2prep"></a>Preparing for InfluxDB 2 backups
+
+InfluxDB&nbsp;2 support was added to IOTstackBackup in May 2022. However, InfluxDB&nbsp;2 is still to be added to the IOTstack templates and menu system.
+
+See also [IOTstack: InfluxDB 2 experiments](#https://gist.github.com/Paraphraser/aef2dbcc37f8f895ec7ead1068fd8bf1).
+
+### <a name="installDependencies"></a>Install dependencies
 
 Make sure your system satisfies the following dependencies:
 
 ```bash
-$ sudo apt install -y rsync python3-pip python3-dev
+$ sudo apt install -y rsync python3-pip python3-dev curl jq wget
 $ curl https://rclone.org/install.sh | sudo bash
 $ sudo pip3 install -U shyaml
 ```
@@ -238,10 +297,11 @@ Some (or all) may be installed already on your Raspberry Pi. Some things to note
 
 1. You can also install *rclone* via `sudo apt install -y rclone` but you get an obsolete version. It is better to use the method shown here.
 2. *shyaml* is a YAML parser (analogous to *jq* for JSON files).
+3. If you prefer, you can omit the `sudo` when installing `shyaml`. *With* `sudo`, the tool is installed globally; *without,* it is installed for the current user.
 
-### <a name="configFile"> The configuration file </a>
+### <a name="configFile"></a>The configuration file
 
-The `iotstack_backup` and `iotstack_restore` scripts depend on a configuration file at the path:
+The [`iotstack_backup`](#iotstackBackup) and [`iotstack_restore`](#iotstackRestore) scripts depend on a configuration file at the path:
 
 ```
 ~/.config/iotstack_backup/config.yml
@@ -249,7 +309,7 @@ The `iotstack_backup` and `iotstack_restore` scripts depend on a configuration f
 
 A script is provided to initialise a template configuration but you will need to edit the file by hand once you choose your backup and restore methods. The configuration file follows the normal YAML syntax rules. In particular, you must use spaces for indentation. You must not use tabs.
 
-#### <a name="keyMethod"> method: </a>
+#### <a name="keyMethod"></a>method:
 
 What "method" means depends on your perspective. For **backup** operations you have a choice of:
 
@@ -265,7 +325,7 @@ For **restore** operations, your choices are:
 
 Although the templates assume you will use the same method for both backup and restore, this is not a requirement. You are free to [mix and match](#mixnmatch).
 
-#### <a name="keyPrefix"> prefix: </a>
+#### <a name="keyPrefix"></a>prefix:
 
 The "prefix" keyword means:
 
@@ -289,7 +349,7 @@ Similarly, if you set up an *rclone* connection to Dropbox, you might refer to t
 dropbox:MyIOTstackBackups
 ```
 
-Both of those are *prefixes*. When `iotstack_backup` runs, it appends the HOSTNAME environment variable to the prefix to form the path to the actual backup directory. For example, suppose the Raspberry Pi has the name `iot-hub`. Appending the host name to the two example prefixes above results in:
+Both of those are *prefixes*. When [`iotstack_backup`](#iotstackBackup) runs, it appends the HOSTNAME environment variable to the prefix to form the path to the actual backup directory. For example, suppose the Raspberry Pi has the name `iot-hub`. Appending the host name to the two example prefixes above results in:
 
 ```
 user@host.domain.com:IOTstackBackups/iot-hub
@@ -300,14 +360,14 @@ The `iot-hub` directory on the remote system is where the backups from the host 
 
 In other words, the hostname is used as a *discriminator*. If you have more than one Raspberry Pi, you can safely use the same [configuration file](#configFile) on each Raspberry Pi without there being any risk of your backups becoming co-mingled or otherwise leading to confusion.
 
-The `iotstack_restore` command has complementary logic. It can either derive the hostname from the *runtag* or you can pass the correct value as a parameter.
+The [`iotstack_restore`](#iotstackRestore) command has complementary logic. It can either derive the hostname from the [«runtag»](#aboutRuntag) or you can pass the correct value as a parameter.
 
 Notes:
 
-* Both the path portion of the prefix (eg `IOTstackBackups`) and all per-machine subdirectories (eg `iot-hub`) should exist on the remote machine **before** you run `iotstack_backup` for the first time on any Raspberry Pi.
+* Both the path portion of the prefix (eg `IOTstackBackups`) and all per-machine subdirectories (eg `iot-hub`) should exist on the remote machine **before** you run [`iotstack_backup`](#iotstackBackup) for the first time on any Raspberry Pi.
 * The *rclone* method *will* automatically create missing directories on the remote host but the *scp* and *rsync* methods will **not**. You have to create the directories by hand.
 
-#### <a name="keyRetain"> retain: </a>
+#### <a name="keyRetain"></a>retain:
 
 The `retain` keyword is an instruction to the backup script as to how many previous backups it should retain *on the Raspberry Pi*.
 
@@ -315,9 +375,9 @@ This, in turn, will *influence* the number of backups retained on the remote hos
 
 To repeat: `retain` only affects what is retained on the Raspberry Pi. 
 
-### <a name="chooseMethods"> Choose your backup and restore methods </a>
+### <a name="chooseMethods"></a>Choose your backup and restore methods
 
-#### <a name="scpOption"> *scp* </a>
+#### <a name="scpOption"></a>*scp*
 
 *scp* (secure copy) saves the results of *this* backup run. Backup files copied to the remote will be retained on the remote until *you* take some action to remove them.
 
@@ -378,16 +438,16 @@ You should test connectivity like this:
 
 Your goal is that both of the *scp* commands should work without prompting for passwords or the need to accept fingerprints. Follow [this tutorial](ssh_tutorial.md) if you don't know how to do that.
 
-Once you are sure your working PREFIX is correct, copy the values to the [configuration file](#configFile).
+Once you are sure your working PREFIX is correct, use your favourite text editor to copy the values to the [configuration file](#configFile).
 
-#### <a name="rsyncOption"> *rsync* </a>
+#### <a name="rsyncOption"></a>*rsync*
 
 *rsync* uses *scp* but performs more work. The essential difference between the two methods is what happens during the final stages of a backup:
 
 * *scp* copies the individual **files** produced by *that* backup to the remote machine; while
-* *rsync* synchronises the `~/IOStack/backup` **directory** on the Raspberry Pi with the backup folder on the remote machine.
+* *rsync* synchronises the `~/IOStack/backup` **directory** on the Raspberry Pi with the backup directory on the remote machine.
 
-The `~/IOStack/backup` directory is trimmed at the end of each backup run. The trimming occurs **after** *rsync* runs so, in practice the backup folder on the remote machine will usually have one more backup than the Raspberry Pi.
+The `~/IOStack/backup` directory is trimmed at the end of each backup run. The trimming occurs **after** *rsync* runs so, in practice the backup directory on the remote machine will usually have one more backup than the Raspberry Pi.
 
 You can install a template [configuration file](#configFile) for *rsync* like this:
 
@@ -411,7 +471,7 @@ restore:
 
 The definition of the `prefix` key is the same as *scp* so simply follow the [*scp*](#scpOption) instructions for determining the actual prefix and testing basic connectivity.
 
-#### <a name="rcloneOption"> *rclone* (Dropbox) </a>
+#### <a name="rcloneOption"></a>*rclone* (Dropbox)
 
 Selecting *rclone* unleashes the power of that package. However, this guide only covers setting up a Dropbox remote. For more information about *rclone*, see:
 
@@ -479,7 +539,7 @@ and perform any necessary software updates before you begin.
 		Waiting for code...
 		```
 
-	- attempt to open your default browser using URL in the above message. In fact, everything may happen so quickly that you might not actually see the message because it will be covered by the browser window. If, however, a browser window does not open:
+	- attempt to open your default browser using the URL in the above message. In fact, everything may happen so quickly that you might not actually see the message because it will be covered by the browser window. If, however, a browser window does not open:
 
 		- copy the URL to the clipboard;
 		- launch a web browser yourself; and
@@ -582,7 +642,7 @@ You should test connectivity like this:
 	* the word "dropbox" is assumed to be the **name** you assigned to the remote when you ran `rclone config`. If you capitalised "Dropbox" or gave it another name like "MyDropboxAccount" then you will need to substitute accordingly. It is **case sensitive**!
 	* the right hand side (after the colon) should not contain embedded spaces or other characters that are open to misinterpretation by `bash`.
 	* `path/to/backups` is relative to top of your Dropbox structure in the cloud. You should not use absolute paths (ie starting with a "/").
-	* Remember that `path/to/backups` will be treated as a [prefix](#keyPrefix) and each machine where you run `iotstack_backup` will append its HOSTNAME to the prefix as a sub-folder.
+	* Remember that `path/to/backups` will be treated as a [prefix](#keyPrefix) and each machine where you run [`iotstack_backup`](#iotstackBackup) will append its HOSTNAME to the prefix as a sub-folder.
 
 2. Test communication with Dropbox:
 
@@ -594,9 +654,9 @@ You should test connectivity like this:
 
 	If the command displays an error, you may need to check your work.
 
-Once you are sure your working PREFIX is correct, copy the values to the [configuration file](#configFile).
+Once you are sure your working PREFIX is correct, use your favourite text editor to copy the values to the [configuration file](#configFile).
 
-#### <a name="mixnmatch"> mix and match </a>
+#### <a name="mixnmatch"></a>mix and match
 
 Although the templates assume the same method will be used for both backup and restore, it does not have to be that way. For starters, while *rsync* uses *scp* to synchronise the `~/IOTstack/backups` folder with the remote host, *rsync* has no "selective reverse synchronisation" functionality that can be used during restore so `method: "RSYNC"` simply invokes `method: "SCP"` during restores.
 
@@ -617,7 +677,7 @@ restore:
   prefix: "user@host.domain.com:path/to/backups"
 ```
 
-### <a name="configCheck"> Check your configuration </a>
+### <a name="configCheck"></a>Check your configuration
 
 You can use the following command to check your [configuration file](#configFile): 
 
@@ -634,202 +694,340 @@ The script will:
 
 If this script returns sensible results that reflect what you have placed in the configuration file then you can be reasonably confident that the backup and restore scripts will behave in a way that implements your intention.
 
-## <a name="backupSide"> The backup side of things </a>
+## <a name="referenceTables"></a>Reference tables
 
-The backup side of things comprises the following scripts:
+### <a name="refExtensions"></a>Table 1: assumed backup file extensions
 
-* `iotstack_backup_general` – backs-up everything<sup>†</sup> except InfluxDB databases
-* `iotstack_backup_influxdb` – backs-up InfluxDB databases
-* `iotstack_backup_nextcloud` – backs-up Nextcloud data and databases
-* `iotstack_backup` – a supervisory script which calls the above and handles copying of the results to another host.
+«script»                    | «extensions»
+:--------------------------:|:------------------------:
+`iotstack_backup_general`   | `.tar.gz`
+`iotstack_backup_influxdb`  | `.tar`
+`iotstack_backup_influxdb2` | `.tar`
+`iotstack_backup_mariadb`   | `.tar.gz`
+`iotstack_backup_nextcloud` | `.tar.gz`
 
-	† "everything" is a slightly loose term. See below.
+Each extension implies the file's internal format. Violating this convention leads to a mess.
 
-In general, `iotstack_backup` is the script you should call.
+### <a name="refFilenames"></a>Table 2: default backup file names
+
+«script»                    | «defaultFileName»
+:--------------------------:|:------------------------:
+`iotstack_backup_general`   | `general-backup.tar.gz `
+`iotstack_backup_influxdb`  | `influx-backup.tar` <sup>†</sup>
+`iotstack_backup_influxdb2` | `influxdb2-backup.tar`
+`iotstack_backup_mariadb`   | `mariadb-backup.tar.gz`
+`iotstack_backup_nextcloud` | `nextcloud-backup.tar.gz`
+
+† The default file name for InfluxDB&nbsp;1.8 is an exception. It would be more consistent to use `influxdb-backup.tar` but maintaining backwards compatibility demands `influx-backup.tar`.
+
+### <a name="refContainers"></a>Table 3: associated containers
+
+«script»                    | associated container(s)
+:--------------------------:|:------------------------:
+`iotstack_backup_influxdb`  | `influxdb`
+`iotstack_backup_influxdb2` | `influxdb2`
+`iotstack_backup_mariadb`   | `mariadb`
+`iotstack_backup_nextcloud` | `nextcloud` + `nextcloud_db`
+
+## <a name="backupSide"></a>The backup side of things
+
+The backup side of things comprises a number of scripts with the prefix `iotstack_backup_` that are invoked by an umbrella script named `iotstack_backup`, which also handles copying of the backup files to another host.
+
+In general, [`iotstack_backup`](#iotstackBackup) is the script you should call.
 
 > Acknowledgement: the backup scripts were based on [Graham Garner's backup script](https://github.com/gcgarner/IOTstack/blob/master/scripts/docker_backup.sh) as at 2019-11-17.
 
-### <a name="iotstackBackupGeneral"> iotstack\_backup\_general </a>
-
-Usage (two forms):
-
-```bash
-iotstack_backup_general path/to/general-backup.tar.gz
-iotstack_backup_general path/to/backupdir runtag {general-backup.tar.gz}
-```
-
-* In the first form, the argument is an absolute or relative path to the backup file.
-* In the second form, the path to the backup file is constructed like this:
-
-	```
-	path/to/backupdir/runtag.general-backup.tar.gz
-	```
-
-	with *general-backup.tar.gz* being replaced if you supply a third argument.
-
-* The resulting `.tar.gz` file will contain:
-
-	* All files matching the patterns:
-
-		* `~/IOTstack/*.yml`
-		* `~/IOTstack/*.env`
-
-	* The following file (if it exists):
-
-		* `~/IOTstack/.env`
-
-	* everything in `~/IOTstack/services`
-	* everything in `~/IOTstack/volumes`, except:
-
-		* `~/IOTstack/volumes/influxdb`
-		* `~/IOTstack/volumes/mariadb`<sup>†</sup>
-		* `~/IOTstack/volumes/nextcloud`
-		* `~/IOTstack/volumes/pihole.restored `
-		* `~/IOTstack/volumes/postgres`<sup>†</sup>
-
-	† omitted because it is not copy-safe but there are, as yet, no scripts to backup these databases like there is for InfluxDB. If you run these and you want to take the risk, just remove the exclusion from the script.
-
-The reason for implementing this as a standalone script is to make it easier to take snapshots and/or build your own backup strategy.
-
-Example:
-
-```bash
-$ cd
-$ mkdir my_special_backups
-$ cd my_special_backups
-$ iotstack_backup_general before_major_changes.tar.gz
-```
-
-### <a name="iotstackBackupInfluxdb"> iotstack\_backup\_influxdb </a>
-
-Usage (two forms):
-
-```bash
-iotstack_backup_influxdb path/to/influx-backup.tar
-iotstack_backup_influxdb path/to/backupdir runtag {influx-backup.tar}
-```
-
-* In the first form, the argument is an absolute or relative path to the backup file.
-* In the second form, the path to the backup file is constructed like this:
-
-	```
-	path/to/backupdir/runtag.influx-backup.tar
-	```
-
-	with *influx-backup.tar* being replaced if you supply a third argument.
-
-* The resulting `.tar` file will contain a portable snapshot of all InfluxDB databases as of the moment that the script started to run.
-
-The reason for implementing this as a standalone script is to make it easier to take snapshots and/or build your own backup strategy.
-
-Example:
-
-```bash
-$ cd
-$ mkdir my_special_backups
-$ cd my_special_backups
-$ iotstack_backup_influxdb before_major_changes.tar
-```
-
-### <a name="iotstackBackupNextcloud"> iotstack\_backup\_nextcloud </a>
-
-Usage (two forms):
-
-```bash
-iotstack_backup_nextcloud path/to/nextcloud-backup.tar.gz
-iotstack_backup_nextcloud path/to/backupdir runtag {nextcloud-backup.tar.gz}
-```
-
-* In the first form, the argument is an absolute or relative path to the backup file.
-* In the second form, the path to the backup file is constructed like this:
-
-	```
-	path/to/backupdir/runtag.nextcloud-backup.tar.gz
-	```
-
-	with *nextcloud-backup.tar.gz* being replaced if you supply a third argument.
-
-The reason for implementing this as a standalone script is to make it easier to take snapshots and/or build your own backup strategy. Example:
-
-```bash
-$ cd
-$ mkdir my_special_backups
-$ cd my_special_backups
-$ iotstack_backup_nextcloud before_major_changes.tar.gz
-```
-
-### <a name="iotstackBackup"> iotstack\_backup </a>
+### <a name="iotstackBackup"></a>iotstack\_backup (umbrella script)
 
 Usage:
 
 ```bash
-iotstack_backup {runtag} {by_host_id}
+$ iotstack_backup {«runtag»} {by_host_id}
 ```
 
-* *runtag* is an _optional_ argument which defaults to syntax defined at [about *runtag*](#aboutRuntag) For example:
+* «runtag» is an _optional_ argument which defaults to syntax defined at [about «runtag»](#aboutRuntag) For example:
 
 	```
-	2020-09-19_1138.iot-hub
+	2022-05-24_1138.iot-hub
 	```
 
 * *by\_host\_dir* is an _optional_ argument which defaults to the value of the HOSTNAME environment variable.
 
-> In general, you should run `iotstack_backup` without parameters. Be sure you know what you are doing before you start experimenting with parameters.
+In general, you should run `iotstack_backup` without parameters. Be sure you know what you are doing before you start experimenting with parameters.
 
-The script invokes `iotstack_backup_general` and `iotstack_backup_influxdb` (in that order) and leaves the results in `~/IOTstack/backups` along with a log file containing everything written to `stdout` and `stderr` as the script executed. Given the example *runtag* above, the resulting files would be:
+The script invokes:
 
-```
-~/IOTstack/backups/2020-09-19_1138.iot-hub.backup-log.txt
-~/IOTstack/backups/2020-09-19_1138.iot-hub.general-backup.tar.gz
-~/IOTstack/backups/2020-09-19_1138.iot-hub.influx-backup.tar
-```
+* [`iotstack_backup_general`](#iotstackBackupGeneral)
+* [`iotstack_backup_influxdb`](#iotstackBackupContainer)
+* [`iotstack_backup_influxdb2`](#iotstackBackupContainer)
+* [`iotstack_backup_nextcloud`](#iotstackBackupContainer)
+* [`iotstack_backup_mariadb`](#iotstackBackupContainer)
+
+The results of those are placed in `~/IOTstack/backups` along with a log file containing everything written to `stdout` and `stderr` as the script executed.
 
 The files are copied to the remote host using the method you defined in the [configuration file](#configFile), and then `~/IOTstack/backups` is cleaned up to remove older backups.
 
-## <a name="restoreSide"> The restore side of things </a>
+### <a name="iotstackBackupGeneral"></a>iotstack\_backup\_general
 
-The restore side of things provide the inverse functionality of the backup scripts and comprise the following scripts:
+Usage (three forms):
 
-* `iotstack_restore_general ` – restores everything present in the general backup
-* `iotstack_restore_influxdb ` – restores InfluxDB databases
-* `iotstack_restore_nextcloud ` – restores Nextcloud data and databases
-* `iotstack_restore` – a supervisory script which retrieves backup images from another host and then calls the above scripts.
+1. Single-argument form:
 
-In general, `iotstack_restore` is the script you should call.
+	```bash
+	$ iotstack_backup_general path/to/backupFile.tar.gz
+	```
 
-### <a name="iotstackRestoreGeneral"> iotstack\_restore\_general </a>
+	The argument is an absolute or relative path to the backup file. The script assumes, but does not enforce, the file-type extensions of `.tar.gz`. The results are undefined if you use different extensions. 
 
-Usage (two forms):
+	The main reason for supporting the single-argument form is to make it easy for you to take snapshots and/or build your own backup and restore strategy. For example:
+
+	Example:
+
+	```bash
+	$ cd
+	$ mkdir my_special_backups
+	$ cd my_special_backups
+	$ iotstack_backup_general before_major_changes.tar.gz
+	```
+
+2. Two-argument form:
+
+	```bash
+	$ iotstack_backup_general path/to/backupdir «runtag»
+	```
+
+	The first argument is a path (absolute or relative) to the folder where the backup file is to be stored. The second argument is the [«runtag»](#aboutRuntag). The path to the backup file is formed via concatenation:
+
+	```
+	path/to/backupdir/«runtag».general-backup.tar.gz
+	``` 
+
+	This form of the script is invoked by the [`iotstack_backup`](#iotstackBackup) umbrella script.
+
+3. Three-argument form:
+
+	```bash
+	$ iotstack_backup_general path/to/backupdir «runtag» filename
+	```
+
+	This is effectively a blend of the first two forms. The path to the backup file is constructed by concatenation using the filename you supply instead of a default:
+
+	```
+	path/to/backupdir/«runtag».filename
+	```
+
+	If you use this form, remember to observe the script's assumption about the file-type extensions of `.tar.gz`.
+
+Providing only that it can identify a viable IOTstack installation, this script always produces a backup file containing:
+
+* All files matching the patterns:
+
+	* `~/IOTstack/*.yml`
+	* `~/IOTstack/*.env`
+
+* The following file (if it exists):
+
+	* `~/IOTstack/.env`
+
+* everything in `~/IOTstack/services`
+* everything in `~/IOTstack/volumes`, except:
+
+	* `influxdb`
+	* `influxdb2`
+	* `mariadb`
+	* `nextcloud`
+	* `postgres` <sup>†</sup>
+	* `subversion` <sup>†</sup>
+	* `pihole.restored`
+	* `lost+found`
+
+	† omitted because the container is not copy-safe but, as yet, there is no container-specific backup script. If you run either and want to take the risk, just remove the exclusion from the script.
+
+### <a name="iotstackBackupContainer"></a>iotstack\_backup\_*«container»*
+
+Usage (three forms):
+
+1. Single-argument form:
+
+	```bash
+	$ «script» path/to/backupFile
+	```
+
+	The argument is an absolute or relative path to the backup file. Each script assumes that the path to the backup file ends with the file-type extension shown in [Table 1](#refExtensions). The scripts do not enforce this. The results are undefined if you do not supply the correct extensions. 
+
+	The main reason for supporting the single-argument form is to make it easy for you to take snapshots and/or build your own backup and restore strategy. For example:
+
+	Example:
+
+	```bash
+	$ cd
+	$ mkdir my_special_backups
+	$ cd my_special_backups
+	$ iotstack_backup_influxdb before_major_changes.tar
+	```
+
+2. Two-argument form:
+
+	```bash
+	$ «script» path/to/backupdir «runtag»
+	```
+
+	The first argument is a path (absolute or relative) to the folder where the backup file is to be stored. The second argument is the [«runtag»](#aboutRuntag). The path to the backup file is formed via concatenation:
+
+	```
+	path/to/backupdir/«runtag».«defaultFileName»
+	``` 
+
+	where «defaultFileName» comes from [Table 2](#refFilenames).
+
+	This form of the script is invoked by the [`iotstack_backup`](#iotstackBackup) umbrella script.
+
+3. Three-argument form:
+
+	```bash
+	$ «script» path/to/backupdir «runtag» filename
+	```
+
+	This is effectively a blend of the first two forms. The path to the backup file is constructed by concatenation using the filename you supply instead of a default:
+
+	```
+	path/to/backupdir/«runtag».filename
+	```
+
+	If you use this form, remember to observe each script's assumption about the correct file-type «extensions» ([Table 1](#refExtensions)).
+
+Each script starts by checking the status of its associated container(s). See [Table 3](#refContainers). The associated container(s) must be running when the script starts and the script exits without creating a backup if this precondition is not met.
+
+This is mainly because the database engines participate in the backup process so they must be running.
+
+The [`iotstack_backup`](#iotstackBackup) umbrella script also relies on this behaviour. It calls all the subordinate scripts unconditionally, irrespective of whether the associated containers are even mentioned in your compose file. If and only if the database engine is running is it backed-up.
+
+## <a name="restoreSide"></a>The restore side of things
+
+The restore side of things comprises a number of scripts with the prefix `iotstack_restore_` that are invoked by an umbrella script named `iotstack_restore`, which also handles fetching of backup files from another host.
+
+In general, [`iotstack_restore`](#iotstackRestore) is the script you should call.
+
+### <a name="iotstackRestore"></a>iotstack\_restore (umbrella script)
+
+Usage:
 
 ```bash
-iotstack_restore_general path/to/general-backup.tar.gz
-iotstack_restore_general path/to/backupdir runtag {general-backup.tar.gz}
+$ iotstack_restore «runtag» {«by_host_dir»}
 ```
 
-* In the first form, the argument is an absolute or relative path to the backup file.
-* In the second form, the path to the backup file is constructed like this:
+* [«runtag»](#aboutRuntag) is a _required_ argument which must exactly match the «runtag» used by the [`iotstack_backup`](#iotstackBackup) run you wish to restore. For example:
+
+	```bash
+	$ iotstack_restore 2022-05-24_1138.iot-hub
+	```
+
+* «by\_host\_dir» is an _optional_ argument. If omitted, the script assumes that «runtag» matches the syntax defined at [about «runtag»](#aboutRuntag) and treats all characters to the right of the first period as the «by\_host\_dir». For example, given the «runtag»:
 
 	```
-	path/to/backupdir/runtag.general-backup.tar.gz
+	2022-05-24_1138.iot-hub
 	```
 
-	with *general-backup.tar.gz* being replaced if you supply a third argument.
+	then «by\_host\_dir» will be:
 
-* In both cases, *general-backup.tar.gz* (or whatever filename you supply)  is expected to be a file created by `iotstack_backup_general`. The result is undefined if this expectation is not satisfied.
-* Running `iotstack_restore_general` will restore:
+	```
+	iot-hub
+	```
 
-	* everything in `~/IOTstack/services`
-	* everything in `~/IOTstack/volumes`, except:
+	If you pass a [about «runtag»](#aboutRuntag) which can't be parsed to extract the «by\_host\_dir» then you must also pass a valid «by\_host\_dir».
 
-		* `~/IOTstack/volumes/influxdb`
-		* `~/IOTstack/volumes/mariadb`<sup>†</sup>
-		* `~/IOTstack/volumes/nextcloud`
-		* `~/IOTstack/volumes/pihole.restored `
-		* `~/IOTstack/volumes/postgres`<sup>†</sup>
+The script:
 
-	* `~/IOTstack/docker-compose.yml` in some situations.
+* Creates a temporary directory within `~/IOTstack` (to ensure everything winds up on the same file-system)
+* Uses your chosen method to copy files matching the pattern «runtag».\* into the temporary directory
+* Deactivates your stack (if at least one container is running)
+* Invokes [`iotstack_restore_general`](#iotstackRestoreGeneral)
+* Invokes [`iotstack_restore_influxdb`](#iotstackRestoreContainer)
+* Invokes [`iotstack_restore_influxdb2`](#iotstackRestoreContainer)
+* Invokes [`iotstack_restore_nextcloud`](#iotstackRestoreContainer)
+* Invokes [`iotstack_restore_mariadb`](#iotstackRestoreContainer)
+* Cleans-up the temporary directory
+* Reactivates your stack if it was deactivated by this script.
 
-	† if you removed the matching exclusion from `iotstack_backup_general` then these directories will be restored in as-backed-up state.
+The subordinate `iotstack_restore_general` and `iotstack_restore_«container»` scripts are invoked with two arguments:
+
+* The path to the temporary restore directory; and
+* The [«runtag»](#aboutRuntag).
+
+Each script assumes that the path to its backup file can be derived from those two arguments. This will be true if the backup was created by [`iotstack_backup`](#iotstackBackup) but is something to be aware of if you roll your own solution.
+
+### <a name="iotstackRestoreGeneral"></a>iotstack\_restore\_general
+
+Usage (three forms):
+
+1. Single-argument form:
+
+	```bash
+	$ iotstack_restore_general path/to/backupFile.tar.gz
+	```
+
+	The argument is an absolute or relative path to the backup file. The script assumes, but does not enforce, the file-type extensions of `.tar.gz`. The results are undefined if you use different extensions. 
+
+	The main reason for supporting the single-argument form is to make it easy for you to take snapshots and/or build your own backup and restore strategy. For example:
+
+	Example:
+
+	```bash
+	$ cd ~/my_special_backups
+	$ iotstack_restore_general before_major_changes.tar.gz
+	```
+
+2. Two-argument form:
+
+	```bash
+	$ iotstack_restore_general path/to/backupdir «runtag»
+	```
+
+	The first argument is a path (absolute or relative) to the folder where the backup file is to be stored. The second argument is the [«runtag»](#aboutRuntag). The path to the backup file is formed via concatenation:
+
+	```
+	path/to/backupdir/«runtag».general-backup.tar.gz
+	``` 
+
+	This form of the script is invoked by the [`iotstack_restore`](#iotstackRestore) umbrella script.
+
+3. Three-argument form:
+
+	```bash
+	$ iotstack_restore_general path/to/backupdir «runtag» filename
+	```
+
+	This is effectively a blend of the first two forms. The path to the backup file is constructed by concatenation using the filename you supply instead of a default:
+
+	```
+	path/to/backupdir/«runtag».filename
+	```
+
+	If you use this form, remember to observe the script's assumption about the file-type extensions of `.tar.gz`.
+
+If any IOTstack containers are running, the script exits without performing any restore operations. Otherwise, the script assumes the supplied backup file was created by `iotstack_backup_general`. The result is undefined if this assumption is not satisfied.
+
+Running `iotstack_restore_general` will restore:
+
+* everything in `~/IOTstack/services`
+* everything in `~/IOTstack/volumes`, except:
+
+	* `influxdb`
+	* `influxdb2`
+	* `mariadb`
+	* `nextcloud`
+	* `postgres`
+	* `subversion`
+	* `pihole.restored`
+	* `lost+found`
+
+Restoration of the **contents** of `./services` and `./volumes` occurs item-by-item according to the following decision table:
+
+item in backup | item in ~/IOTstack | action
+:-------------:|:------------------:|:-----------
+no             | *irrelevant*       | none 
+yes            | no                 | restore 
+yes            | yes                | replace 
 
 After that, any **files** remaining in the restore are given special handling. These typically include:
 
@@ -841,121 +1039,91 @@ After that, any **files** remaining in the restore are given special handling. T
 
 * `.env` and/or any files with a `.env` extension.
 
+The decision table for these files is:
+
+item in backup | item in ~/IOTstack | test              | action
+:-------------:|:------------------:|:------------------|:-----------
+no             | *irrelevant*       | *irrelevant*      | none 
+yes            | no                 | none              | restore 
+yes            | yes                | compare same      | none 
+yes            | yes                | compare different | copy-with-suffix 
+
 This is to cater for two distinct situations:
 
-* On a bare-metal restore, `~/IOTstack` will not contain any of these file(s) so anything in the backup will be restored.
-* If a file is already present in `~/IOTstack` then it may be the same as the backup or contain customisations that should not be overwritten. The restore compares the file in `~/IOTstack` with the one in *path_to.tar.gz*:
-	* If the two files compare the same then nothing happens.
-	* If the two files do not compare the same, the file from *path_to.tar.gz* will be moved into `~/IOTstack` with a date-time suffix. If you want to use a file that has a date-time suffix, you have to rename it by hand.
+* On a bare-metal restore, `~/IOTstack` will not contain any of these files so everything in the backup will be restored "as is".
+* If a file is already present in `~/IOTstack` then it may be the same as the backup or contain customisations that should not be overwritten. If the two files compare different, the file from the backup is restored with a date-time suffix. If you want to use a file that has a date-time suffix, you have to rename it by hand.
 
-The reason for implementing the "general" restore as a standalone script is to make it easier to manage snapshots and/or build your own backup strategy.
+### <a name="iotstackRestoreContainer"></a>iotstack\_restore\_*«container»*
 
-Example:
+Usage (three forms):
 
-```bash
-$ cd ~/my_special_backups
-$ iotstack_restore_general before_major_changes.tar.gz
-```
-
-### <a name="iotstackRestoreInfluxdb"> iotstack\_restore\_influxdb </a>
-
-Usage (two forms):
-
-```bash
-iotstack_restore_influxdb path/to/influx-backup.tar
-iotstack_restore_influxdb path/to/backupdir runtag {influx-backup.tar}
-```
-
-* In the first form, the argument is an absolute or relative path to the backup file.
-* In the second form, the path to the backup file is constructed like this:
-
-	```
-	path/to/backupdir/runtag.influx-backup.tar
-	```
-
-	with *influx-backup.tar* being replaced if you supply a third argument.
-
-* In both cases, *influx-backup.tar* (or whatever filename you supply)  is expected to be a file created by `iotstack_backup_influxdb`. The result is undefined if this expectation is not satisfied.
-* Running `iotstack_restore_influxdb` will restore the contents of a portable influx backup. The operation is treated as a "full" restore and proceeds by:
-	* ensuring the influxdb container is not running
-	* erasing everything below `~/IOTstack/volumes/influxdb`
-	* erasing everything in `~/IOTstack/backups/influxdb/db`
-	* restoring the contents of *influx-backup.tar* to `~/IOTstack/backups/influxdb/db`
-	* activating the `influxdb` container (which will re-initialise to "factory conditions")
-	* instructing influx to restore the contents of `~/IOTstack/backups/influxdb/db`
-	* terminating the `influxdb` container.
-
-### <a name="iotstackRestoreNextcloud"> iotstack\_restore\_nextcloud </a>
-
-Usage (two forms):
-
-```bash
-iotstack_restore_nextcloud path/to/nextcloud-backup.tar.gz
-iotstack_restore_nextcloud path/to/backupdir runtag {nextcloud-backup.tar.gz}
-```
-
-* In the first form, the argument is an absolute or relative path to the backup file.
-* In the second form, the path to the backup file is constructed like this:
-
-	```
-	path/to/backupdir/runtag.nextcloud-backup.tar.gz
-	```
-
-	with *nextcloud-backup.tar.gz* being replaced if you supply a third argument.
-
-* In both cases, *nextcloud-backup.tar.gz* (or whatever filename you supply) is expected to be a file created by `iotstack_backup_nextcloud`. The result is undefined if this expectation is not satisfied.
-* Running `iotstack_restore_nextcloud`:
-	* ensures the nextcloud and nextcloud_db containers are not running
-	* erases the existing nextcloud_db (MariaDB) database
-	* restores the contents of a portable MariaDB backup
-	* merges the contents of the restored `www` folder by replacing whole subfolders
-
-### <a name="iotstackRestore"> iotstack\_restore </a>
-
-Usage:
-
-```bash
-iotstack_restore runtag {by_host_dir}
-```
-
-* *runtag* is a _required_ argument which must exactly match the *runtag* used by the `iotstack_backup` run you wish to restore. For example:
+1. Single-argument form:
 
 	```bash
-	$ iotstack_restore 2020-09-19_1138.iot-hub
+	$ «script» path/to/backupFile
 	```
 
-* *by\_host\_dir* is an _optional_ argument. If omitted, the script assumes that *runtag* matches the syntax defined at [about *runtag*](#aboutRuntag) and treats all characters to the right of the first period as the *by\_host\_dir*. For example, given the *runtag*:
+	The argument is an absolute or relative path to the backup file. Each script assumes that the path to the backup file ends with the file-type extension shown in [Table 1](#refExtensions). The scripts do not enforce this. The results are undefined if you do not supply a backup file in the expected format.
+
+	The main reason for supporting the single-argument form is to make it easy for you to take snapshots and/or build your own backup and restore strategy. For example:
+
+	Example:
+
+	```bash
+	$ cd ~/my_special_backups
+	$ iotstack_restore_influxdb before_major_changes.tar
+	```
+
+2. Two-argument form:
+
+	```bash
+	$ «script» path/to/backupdir «runtag»
+	```
+
+	The first argument is a path (absolute or relative) to the folder where the backup file is to be stored. The second argument is the [«runtag»](#aboutRuntag). The path to the backup file is formed via concatenation:
 
 	```
-	2020-09-19_1138.iot-hub
+	path/to/backupdir/«runtag».«defaultFileName»
+	``` 
+
+	where «defaultFileName» comes from [Table 2](#refFilenames).
+
+	This form of the script is invoked by the [`iotstack_restore`](#iotstackRestore) umbrella script.
+
+3. Three-argument form:
+
+	```bash
+	$ «script» path/to/backupdir «runtag» filename
 	```
 
-	then *by\_host\_dir* will be:
+	This is effectively a blend of the first two forms. The path to the backup file is constructed by concatenation using the filename you supply instead of a default:
 
 	```
-	iot-hub
+	path/to/backupdir/«runtag».filename
 	```
 
-	If you pass a *runtag* which can't be parsed to extract the *by\_host\_dir* then you must also pass a valid *by\_host\_dir*.
+	If you use this form, remember to observe each script's assumption about the correct file-type «extensions» ([Table 1](#refExtensions)).
 
-The script:
+Each script exits without error if the input file constructed from its parameters does not exist. The [`iotstack_restore`](#iotstackRestore) umbrella script relies on this behaviour. It calls all the subordinate scripts unconditionally, assuming that the absence of a backup file implies that there is nothing to restore.
 
-* Creates a temporary directory within `~/IOTstack` (to ensure everything winds up on the same file-system)
-* Uses your chosen method to copy files matching the pattern *runtag.\** into the temporary directory
-* Deactivates your stack (if at least one container is running)
-* Invokes `iotstack_restore_general`
-* Invokes `iotstack_restore_influxdb`
-* Cleans-up the temporary directory
-* Reactivates your stack if it was deactivated by this script.
+Each script starts by checking the status of its associated container(s). See [Table 3](#refContainers). The associated container(s) must **not** be running when the script starts and the script exits without creating a backup if this precondition is not met. The [`iotstack_restore`](#iotstackRestore) umbrella script always ensures the stack is down before calling its subordinate scripts so, in practice, the only time you have to worry about this is if you are invoking a *«container»* restore script directly.
 
-Both `iotstack_restore_general` and `iotstack_restore_influxdb` are invoked with two arguments:
+The common pattern for the database restore scripts is:
 
-* The path to the temporary restore directory; and
-* The *runtag*.
+1. Erase the associated container's persistent storage.
+2. Start the container so it can self-initialise to "factory conditions".
+3. Instruct the database engine to restore its databases from the backup.
+4. Terminate the container.  
 
-Each script assumes that the path to its backup file can be derived from those two arguments. This will be true if the backup was created by `iotstack_backup` but is something to be aware of if you roll your own solution.
+Note:
 
-## <a name="bareMetalRestore"> Bare-metal restore </a>
+* The presence of a backup file for a container assumes the existence of a corresponding service definition in the compose file. Violating this assumption will lead to a mess.
+
+	To put this another way, restoring a database container needs the involvement of the database engine. The only way the database engine can be made available to the restore script is if docker-compose can bring up the relevant container when commanded to do so by the script and that, in turn, relies on the existence of an appropriate service definition in the compose file.
+	
+	This is also why [`iotstack_restore_general`](#iotstackRestoreGeneral) runs first, because it is assumed to guarantee the presence of an appropriate compose file, particularly during a bare-metal restore. 
+
+## <a name="bareMetalRestore"></a>Bare-metal restore
 
 Scenario. Your SD card wears out, or your Raspberry Pi emits magic smoke, or you decide the time has come for a fresh start. 
 
@@ -972,102 +1140,131 @@ Scenario. Your SD card wears out, or your Raspberry Pi emits magic smoke, or you
 		~/.config/iotstack_backup/config.yml
 		```
 
-2. Run `iotstack_restore` with the runtag of a recent backup. Among other things, this will recover `docker-compose.yml` (ie there is no need to run the menu and re-select your services).
-3. Bring up the stack.
+2. Run [`iotstack_restore`](#iotstackRestore) with the [«runtag»](#aboutRuntag) of a recent backup. Among other things, this will recover `docker-compose.yml` (ie there is no need to run the menu and re-select your services). As the various database containers are restored, a side-effect is to pull the container's image from DockerHub.
+3. Bring up the stack. That pulls any remaining images from DockerHub and, as the saying goes, you're "up, up and away".
 
-## <a name="iotstackReloadInfluxdb"> iotstack\_reload\_influxdb </a>
+## <a name="envVars"></a>Environment variables
+
+IOTstackBackup supports the following environment variables:
+
+* `IOTSTACK=`
+
+	One of the key assumptions for IOTstack is that you begin by running:
+
+	```bash
+	$ git clone https://github.com/SensorsIot/IOTstack.git ~/IOTstack
+	```
+
+	IOTstackBackup relies on `~/IOTstack` being present and containing the expected files and folders. If you decide to use a different name for the top-level folder, you communicate this to IOTstackBackup using the `IOTSTACK` environment variable. For example:
+
+	```bash
+	$ IOTSTACK="$HOME/MyStack" iotstack_backup
+	```
+
+	> Whether all the scripts supplied with IOTstack will work, reliably, if you use a different top-level folder is a separate question. The point being made here is that IOTstackBackup supports it.
+	 
+	Similarly, if you wanted to backup just the InfluxDB databases:
+
+	```
+	$ IOTSTACK="$HOME/MyStack" iotstack_backup_influxdb backup-test-data.tar
+	```
+
+	You can also use the `IOTSTACK` environment variable if you have multiple copies of IOTstack installed on a single Raspberry Pi. For example, assume your home directory contains:
+
+	```
+	drwxr-xr-x 13 pi pi  4096 May 24 12:35 IOTstack
+	drwxr-xr-x 13 pi pi  4096 May 24 12:35 IOTstack.test
+	```
+
+	If you want to backup the `IOTstack.test` directory, run:
+
+	```bash
+	$ IOTSTACK="$HOME/IOTstack.test" iotstack_backup $(date +"%Y-%m-%d_%H%M").$HOSTNAME.test
+	```
+
+	> Note the explicit [«runtag»](#aboutRuntag) parameter. This is to avoid colliding with existing backup sets if you are using the [*rsync*](#rsyncOption) or [*rclone*](#rcloneOption) methods to copy your backup files to another system. Also remember to create the corresponding *destination* top-level directory if you are using the [*scp*](#scpOption) or [*rsync*](#rsyncOption) methods.
+
+* `CONTAINER=`
+
+	This variable is supported by the [iotstack\_backup\_*«container»*](#iotstackBackupContainer) and [iotstack\_restore\_*«container»*](#iotstackRestoreContainer) scripts. 
+
+	Suppose you have cloned the `mariadb` service definition and called it `mydb`. The IOTstack conventions you should observe in the service definition are:
+
+	1. The title of the service definition is `mydb`.
+	2. The `container_name` is `mydb`.
+	3. The prefixes of the external paths in the `volumes` statements begin with:
+
+		```yaml
+		- ./volumes/mydb/
+		```
+
+	Providing you conform with those conventions, you can use the `CONTAINER` environment variable to backup and restore your container:
+
+	```bash
+	$ CONTAINER="mydb" iotstack_backup_mariadb mydb-backup.tar.gz
+	$ CONTAINER="mydb" iotstack_restore_mariadb mydb-backup.tar.gz
+	```
+
+	> You will need to edit the [`iotstack_backup`](#iotstackBackup) and [`iotstack_restore`](#iotstackRestore) umbrella scripts if you want `mydb` processed automatically.
+
+## <a name="iotstackReloadInflux"></a>Reloading Influx databases "in situ"
+
+Reloading InfluxDB databases can help address some performance issues and allow you to convert between indexing modes.
 
 Usage:
 
-```bash
-iotstack_reload_influxdb
-```
+* InfluxDB 1.8
 
-I wrote this script because I noticed a difference in behaviour between my "live" and "test" RPis. Executing this command:
+	```bash
+	$ iotstack_reload_influxdb
+	```
 
-```bash
-$ docker exec -it influxdb bash
-```
+* InfluxDB 2
 
-on the "live" RPi was extremely slow (30 seconds). On the "test" RPi, it was almost instantaneous. The hardware was indentical. The IOTstack installation identical, the Docker image versions for InfluxDB were identical. The only plausible explanation was that the InfluxDB databases on the "live" RPi had grown organically whereas the databases on the "test" RPi were routinely restored by `iotstack_restore`.
+	```bash
+	$ iotstack_reload_influxdb2
+	```
 
-I wrote this script to test whether a reload on the "live" RPi would improve performance. The script:
+Each script:
 
-* Instructs InfluxDB to backup the current databases
-* Takes the stack down
-* Removes `~/IOTSTACK/volumes/influxdb/data` and its contents
-* Brings the stack up (at which point the InfluxDB databases will be empty)
-* Instructs InfluxDB to restore from the databases from backup.
+1. Instructs the container to backup the current databases;
+2. Takes the container down;
+3. Erases existing persistent storage;
+4. Starts the container (the container will reinitialise to "factory fresh");
+5. Instructs the container to restore its databases from the backup taken in step 1.
 
-I had assumed that I would need to re-run this script periodically, whenever opening a shell got too slow for my needs. But the problem seems to have been a one-off. The databases on the "live" machine still grow organically but the *slowness* problem has not recurred.
+There is some downtime while this process runs but it is kept to a minimum.
 
-See also:
+## <a name="endNotes"></a>Notes
 
-* [about InfluxDB backup and restore commands](#aboutInfluxCommands)
-* [about InfluxDB database restoration](#aboutInfluxRestore).
+### <a name="aboutRuntag"></a>about «runtag»
 
-## <a name="endNotes"> Notes </a>
-
-### <a name="aboutRuntag">about *runtag*</a>
-
-When omitted as an argument to `iotstack_backup`, *runtag* defaults to the current date-time value in the format *yyyy-mm-dd_hhmm* followed by the host name as determined from the HOSTNAME environment variable. For example:
-
-```
-2020-09-19_1138.iot-hub
-```
-
-The *yyyy-mm-dd_hhmm.hostname* syntax is assumed by both `iotstack_backup` and `iotstack_restore` but no checking is done to enforce this.
-
-If you pass a value for *runtag*, it must be a single string that does not contain characters that are open to misinterpretation by `bash`, such as spaces, dollar signs and so on.
-
-There is also an implied assumption that HOSTNAME does not contain spaces or special characters.
-
-The scripts will **not** protect you if you ignore this restriction. Ignoring this restriction **will** create a mess and you have been warned!
-
-You are welcome to fix the scripts so that you can pass arbitrary quoted strings (eg "my backup from last tuesday") but those are **not** supported at the moment.
-
-### <a name="topdir">about `$HOME/IOTstack` assumption</a>
-
-All scripts assume that the IOTstack folder is located at the path `$HOME/IOTstack`. In most situations, that will be the absolute path:
-
-```
-/home/pi/IOTstack
-```
-
-This assumption can be overridden using the `IOTSTACK` environment variable. For example:
+When omitted as an argument to [`iotstack_backup`](#iotstackBackup), «runtag» defaults to the current date-time value in the format *yyyy-mm-dd_hhmm* followed by the host name as determined from the HOSTNAME environment variable. For example:
 
 ```bash
-$ IOTSTACK=$HOME/OldVersionOfIOTstack iotstack_backup_general oldversionbackup.tar.gz
+$ RUNTAG=$(date +"%Y-%m-%d_%H%M").$HOSTNAME
+$ echo $RUNTAG
+2022-05-24_1138.iot-hub
 ```
 
-### <a name="aboutInfluxCommands">about InfluxDB backup and restore commands</a>
+The *yyyy-mm-dd_hhmm.hostname* syntax is assumed by both [`iotstack_backup`](#iotstackBackup) and [`iotstack_restore`](#iotstackRestore) but no checking is done to enforce this.
 
-When you examine the scripts, you will see that `influxd` is instructed to perform a backup like this:
+If you pass a value for «runtag», it must be a single string that does not contain characters that are open to misinterpretation by `bash`, such as spaces, dollar signs and so on.
 
-```bash
-docker exec influxdb influxd backup -portable /var/lib/influxdb/backup
-```
+The period character (".", aka "full stop") has a special meaning:
 
-while a restore is handled like this:
+* everything to the **left** of the **first** period is assumed to be the DATETIME portion but does **not** have to be a valid date-time value;
+* everything to the **right** of the **first** period is the HOSTNAME portion but does not have to be a valid host-name in the sense of existing on your network.
 
-```bash
-docker exec influxdb influxd restore -portable /var/lib/influxdb/backup
-```
+The period being special also implies:
 
-In both cases, `/var/lib/influxdb/backup` is a path *inside* the container which maps to `~/IOTstack/backups/influxdb/db` *outside* the container. This mapping is defined in `~/IOTstack/docker-compose.yml`.
+* the DATETIME portion **can't** contain any periods;
+* the HOSTNAME portion **can** contain periods; but
+* supplying a «runtag» which doesn't contain at least one period will produce a mess.
 
-### <a name="aboutInfluxRestore">about InfluxDB database restoration</a>
+The scripts will **not** protect you if you ignore these rules. You **will** create a mess and you have been warned!
 
-InfluxDB database restoration produces a series of messages which fit these two basic patterns:
-
-```
-yyyy/mm/dd hh:mm:ss Restoring shard nnn live from backup yyyymmddThhmmssZ.snnn.tar.gz
-yyyy/mm/dd hh:mm:ss Meta info not found for shard nnn on database _internal. Skipping shard file yyyymmddThhmmssZ.snnn.tar.gz
-```
-
-I have no idea what the "Meta info not found" messages actually mean. They sound ominous but they seem to be harmless. I have done a number of checks and have never encountered any data loss across a backup and restore. I think these messages can be ignored.
-
-### <a name="nextcloudMaintenanceMode"> if Nextcloud gets stuck in "maintenance mode" </a>
+### <a name="nextcloudMaintenanceMode"></a>if Nextcloud gets stuck in "maintenance mode"
 
 If Nextcloud backup fails, you may find that Nextcloud has been left in "maintenance mode" and you are locked out. To take Nextcloud out of maintenance mode:
 
@@ -1075,131 +1272,85 @@ If Nextcloud backup fails, you may find that Nextcloud has been left in "mainten
 $ docker exec -u www-data -it nextcloud php occ maintenance:mode --off
 ```
 
-### <a name="usingcron">using cron to run iotstack\_backup </a>
+### <a name="usingcron"></a>using cron to run iotstack\_backup
 
-I do it like this.
+Resources:
+
+* [crontab template](https://github.com/Paraphraser/PiBuilder/blob/master/boot/scripts/support/home/pi/crontab) - a good starting point
+* [crontab guru](https://crontab.guru) - for checking crontab entries
+
+Setup:
 
 1. Scaffolding:
 
 	```bash
 	$ mkdir ~/Logs
-	$ touch ~/Logs/iotstack_backup.log
 	```
 
-2. crontab preamble:
+2. If you don't have an existing crontab, you can download this template and use it to initialise your system:
 
+	```bash
+	$ wget -qO my-crontab.txt https://raw.githubusercontent.com/Paraphraser/PiBuilder/master/boot/scripts/support/home/pi/crontab
+	$ crontab my-crontab.txt
+	$ rm my-crontab.txt
 	```
-	SHELL=/bin/bash
-	PATH=/home/pi/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-	```
 
-	The `PATH=` statement above assumes that the `iotstack_backup` and `iotstack_restore` scripts were installed in one of the directories in the colon-separated list on the right hand side of that statement. It is prudent to check that assumption:
-
-	* Run the following command:
-
-		```bash
-		$ which iotstack_backup
-		```
-
-		You ran this command earlier at [Download repository](#downloadRepository) to confirm that the scripts had been installed where Raspberry Pi OS could find them. This time, you should **not** get silence but should, instead, get an answer like:
-
-		```
-		/home/pi/.local/bin/iotstack_backup
-		```
-
-	* Copy the entire `PATH` statement to the clipboard, then paste it into your terminal window and run it. For example:
-
-		```bash
-		$ PATH=/home/pi/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-		```
-
-	* Repeat the same `which` command as above. If you get **silence**, you will need to adjust the `PATH` statement in the crontab preamble so that it includes the directory where `iotstack_backup` and `iotstack_restore` were installed. For example, if the first `which` command returned the answer:
-
-		```
-		/home/pi/bin/iotstack_backup
-		```
-
-		then you will need to add the `/home/pi/bin` installation directory to the top of the `PATH` statement in your crontab, as in:
-
-		```
-		PATH=/home/pi/bin:/home/pi/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-		```
-
-	* Any time you change your PATH to perform a test (as you did two steps back), it is a good idea to logout and login again to get it back to normal.
-
-3. crontab entry:
+3. Design one or more crontab entries to run [`iotstack_backup`](#iotstackBackup). For example, to run the command once a day at 11am:
 
 	```
 	# backup Docker containers and configurations once per day at 11:00am
 	00	11	*	*	*	iotstack_backup >>./Logs/iotstack_backup.log 2>&1
 	```
 
-	See [crontab.guru](https://crontab.guru/#00_11_*_*_*) if you want to understand the syntax of the last line.
+	See [crontab.guru](https://crontab.guru/#00_11_*_*_*) if you want to understand the syntax or try out alternatives.
 
-The completed `crontab` would look like this:
+	See [understanding logging when cron is involved](#cronLogging) if you want to know why command output needs to be redirected to `./Logs/iotstack_backup.log`.
 
-```
-SHELL=/bin/bash
-PATH=/home/pi/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-
-# backup Docker containers and configurations once per day at 11:00am
-00	11	*	*	*	iotstack_backup >>./Logs/iotstack_backup.log 2>&1
-```
-
-If you are unsure about how to set up a `crontab`:
-
-1. First check whether you have an existing `crontab` by:
+4. Once you have designed your crontab entries, you need to edit your working crontab to include them:
 
 	```bash
-	$ crontab -l
+	$ crontab -e
 	```
 
-	The command will either display your `crontab` or report:
+	That command uses the default Unix editor which you set using the `EDITOR` environment variable. As an alternative, you can export your working crontab to a text file:
 
+	```bash
+	$ crontab -l >my-crontab.txt
 	```
-	no crontab for pi
+
+	Then you can edit `my-crontab.txt ` using the text editor of your choice. Once you are ready and want to import your new crontab:
+
+	```bash
+	$ crontab my-crontab.txt
 	```
 
-2. Irrespective of whether you have an existing `crontab` or not, you can:
+#### <a name="cronLogging"></a>understanding logging when cron is involved
 
-	* ***Either*** – edit your `crontab` in-situ via this command:
+Normally, [`iotstack_backup`](#iotstackBackup) writes its log to the path:
 
-		```bash
-		$ crontab -e
-		```
+```
+~/IOTstack/backups/yyyy-mm-dd_hhmm.hostname.backup-log.txt
+```
 
- 		This will use the value of your `EDITOR` environment variable (if you have set it) or offer choice of editors. It will initialise a new `crontab` if you did not have one before.
- 
- 	* ***Or*** – prepare your `crontab` as a separate file (eg "my-crontab.txt") and import it:
+That happens whether you run [`iotstack_backup`](#iotstackBackup) from the command line or via cron.
 
-		```bash
-		$ crontab my-crontab.txt
-		```
+If something prevents that log file from being created (eg a permission conflict) when you run [`iotstack_backup`](#iotstackBackup) from the command line, you will get error messages to help you diagnose the problem.
 
-		This method always replaces any existing `crontab`.
+That can't happen when [`iotstack_backup`](#iotstackBackup) is started by cron because there is no terminal session to write to. In this situation, the evidence you are likely to need to diagnose problems will be found in:
 
-	* ***Or*** – combine the two methods. First, if you have an existing `crontab`, export it to a file:
+```
+~/Logs/iotstack_backup.log
+```
 
-		```bash
-		$ crontab -l >my-crontab.txt
-		```
+You may also find a "You have new mail" message on your next login.
 
-		Edit the "my-crontab.txt" file, and finish by re-importing the edited file:
+### <a name="periodicMaintenance"></a>periodic maintenance
 
-		```bash
-		$ crontab my-crontab.txt
-		```
-
-If everything works as expected, `~/Logs/iotstack_backup.log` will be empty. The actual log is written to *yyyy-mm-dd_hhmm.backup-log.txt* inside `~/IOTstack/backups`.
-
-When things don't go as expected (eg a permissions issue), the information you will need for debugging will turn up in `~/Logs/iotstack_backup.log` and you may also find a "You have new mail" message on your next login.
-
-### <a name="periodicMaintenance"> periodic maintenance </a>
-
-From time to time, you should synchronise your local copy of the IOTstackBackup repository by synchronising it with GitHub and then reinstall the scripts:
+From time to time, you should synchronise your local copy of the IOTstackBackup repository with GitHub and then reinstall the scripts:
 
 ```bash
 $ cd ~/.local/IOTstackBackup
+$ git checkout master
 $ git pull
 $ ./install_scripts.sh
 ```

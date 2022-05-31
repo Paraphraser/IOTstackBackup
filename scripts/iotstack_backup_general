@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 
-# should not run as root
-[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
-
 # support user renaming of script
 SCRIPT=$(basename "$0")
 
-# the default name and correct extension type is
-DEFAULTFILENAME="general-backup.tar.gz"
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "$SCRIPT should NOT be run using sudo" && exit -1
+
+# assumptions that can be overridden
+IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
+DEFAULTFILENAME=${DEFAULTFILENAME:-"general-backup.tar.gz"}
+
+# the project name is the all-lower-case form of the folder name
+PROJECT=$(basename ${IOTSTACK,,})
 
 # $1 is required and is either path to a .tar.gz or path to a folder
 # $2 is optional and is the runtag (yyyy-mm-dd_hhmm.host-name)
@@ -39,8 +43,8 @@ if [ -e "$BACKUP_TAR_GZ" ] ; then
 fi
 
 # assumptions
-IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
-COMPOSE="$IOTSTACK/docker-compose.yml"
+COMPOSENAME="docker-compose.yml"
+COMPOSE="$IOTSTACK/$COMPOSENAME"
 
 # check the key assumptions
 if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
@@ -81,10 +85,11 @@ done
 BACKUP_EXCLUDE="$(mktemp -p /dev/shm/)"
 cat <<-EXCLUSIONS >"$BACKUP_EXCLUDE"
 ./mkdocs.yml
-./volumes/influxdb*/*
-./volumes/mariadb/*
-./volumes/nextcloud/*
-./volumes/postgres/*
+./volumes/influxdb
+./volumes/influxdb2
+./volumes/mariadb
+./volumes/nextcloud
+./volumes/postgres
 ./volumes/pihole.restored
 ./volumes/subversion
 ./volumes/lost+found

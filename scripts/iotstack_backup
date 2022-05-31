@@ -1,10 +1,30 @@
 #!/usr/bin/env bash
 
-# should not run as root
-[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
-
 # support user renaming of script
 SCRIPT=$(basename "$0")
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "$SCRIPT should NOT be run using sudo" && exit -1
+
+# assumptions that can be overridden
+IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
+
+# the project name is the all-lower-case form of the folder name
+PROJECT=$(basename ${IOTSTACK,,})
+
+# useful function
+isStackUp() {
+   if COUNT=$( \
+      curl -s --unix-socket /var/run/docker.sock http://localhost/containers/json | \
+      jq -c ".[].Labels.\"com.docker.compose.project\" | contains(\"$1\")" | \
+      wc -l \
+   ) ; then
+      if [ $COUNT -gt 0 ] ; then
+         return 0
+      fi
+   fi
+   return 1
+}
 
 USAGE=0
 
@@ -44,8 +64,9 @@ if [ $USAGE -ne 0 ] ; then
    exit -1
 fi
 
-if [ -z "$(which shyaml)" ] ; then
-   echo "Please re-run install_scripts.sh and follow the instructions to install \"shyaml\"."
+# check dependencies
+if [ -z "$(which shyaml)" -o -z "$(which curl)" -o -z "$(which jq)" ] ; then
+   echo "Missing dependencies. Please re-run install_scripts.sh."
    exit -1
 fi
 
@@ -70,13 +91,11 @@ LOCAL_RETAIN=${LOCAL_RETAIN:-"8"}
 CLOUD_PATH="$CLOUD_PREFIX/$BY_HOST_DIR"
 
 # assumptions
-IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
 BACKUPSDIR="$IOTSTACK/backups"
-COMPOSE="$IOTSTACK/docker-compose.yml"
+COMPOSENAME="docker-compose.yml"
+COMPOSE="$IOTSTACK/$COMPOSENAME"
 LOGNAME="backup-log"
 LOGFILE="$RUNTAG.$LOGNAME.txt"
-GENERALNAME="general-backup"
-INFLUXNAME="influx-backup"
 
 # check the key assumptions
 if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
@@ -85,6 +104,13 @@ if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
    echo "   $COMPOSE"
    echo "This may indicate a problem with your installation."
    exit -1
+fi
+
+# check IOTstack seems to be running
+if ! isStackUp "$PROJECT" ; then
+   echo "Warning: $PROJECT does not seem to be running. The general backup"
+   echo "         will work but backups for database and other special-case"
+   echo "         containers will be skipped."
 fi
 
 # make sure the backups directory exists, has correct ownership & mode
@@ -111,11 +137,17 @@ docker image ls --all --digests --no-trunc
 # perform the general backup
 iotstack_backup_general "$BACKUPSDIR" "$RUNTAG"
 
-# perform the influx backup
+# perform the influxdb 1.x backup
 iotstack_backup_influxdb "$BACKUPSDIR" "$RUNTAG"
+
+# perform the influxdb 2.x backup
+iotstack_backup_influxdb2 "$BACKUPSDIR" "$RUNTAG"
 
 # perform the nextcloud backup
 iotstack_backup_nextcloud "$BACKUPSDIR" "$RUNTAG"
+
+# perform the mariadb backup
+iotstack_backup_mariadb "$BACKUPSDIR" "$RUNTAG"
 
 # copy the files (keep in mind that log entries written after the
 # log is copied to the remote will only be in the local log).
@@ -149,9 +181,11 @@ case "$CLOUD_METHOD" in
 
 esac
 
-# cleanup
-for ITEM in "$GENERALNAME" "$INFLUXNAME" "$LOGNAME" ; do
-   ls -t1 *."$ITEM".* 2>/dev/null | tail -n +$LOCAL_RETAIN | xargs rm -f
+# cleanup: containers - "influx" not "influxdb" - then logs as a special case
+for C in "general" "influx" "influxdb2" "nextcloud" "mariadb" ; do
+   ls -t1 *."$C-backup".* 2>/dev/null | tail -n +$LOCAL_RETAIN | xargs rm -f
 done
+ls -t1 *."$LOGNAME".* 2>/dev/null | tail -n +$LOCAL_RETAIN | xargs rm -f
+
 
 echo "----- Finished $SCRIPT at $(date) -----"

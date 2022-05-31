@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+
+# support user renaming of script
+SCRIPT=$(basename "$0")
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "$SCRIPT should NOT be run using sudo" && exit -1
+
+# assumptions that can be overridden
+IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
+CONTAINER="${CONTAINER:-"mariadb"}"
+DEFAULTFILENAME=${DEFAULTFILENAME:-"$CONTAINER-backup.tar.gz"}
+
+# the project name is the all-lower-case form of the folder name
+PROJECT=$(basename ${IOTSTACK,,})
+
+# useful function
+isContainerRunning() {
+   if STATUS=$(curl -s --unix-socket /var/run/docker.sock http://localhost/containers/$1/json | jq .State.Status) ; then
+      if [ "$STATUS" = "\"running\"" ] ; then
+         return 0
+      fi
+   fi
+   return 1
+}
+
+# $1 is required and is either path to a .tar.gz or the path to a folder
+# $2 is optional and is the runtag (yyyy-mm-dd_hhmm.host-name)
+# $3 is optional and overrides the default file name
+
+case "$#" in
+
+  1)
+    RESTORE_TAR_GZ=$(realpath "$1")
+    ;;
+
+  2 | 3)
+    RESTORE_TAR_GZ=$(realpath "$1/$2.${3:-"$DEFAULTFILENAME"}")
+    ;;
+
+  *)
+    echo "Usage 1: $SCRIPT path/to/$DEFAULTFILENAME"
+    echo "Usage 2: $SCRIPT path/to/backupdir runtag {override}"
+    echo "         (override defaults to $DEFAULTFILENAME)"
+    exit -1
+    ;;
+
+esac
+
+# it is an error if the restore tar does not exist
+if [ ! -e "$RESTORE_TAR_GZ" ] ; then
+   echo "Warning: $RESTORE_TAR_GZ does not exist - skipped"
+   exit 0
+fi
+
+# assumptions
+COMPOSENAME="docker-compose.yml"
+COMPOSE="$IOTSTACK/$COMPOSENAME"
+VOLUMES="$IOTSTACK/volumes"
+MARIADB_VOLUMES="$VOLUMES/$CONTAINER"
+MARIADB_BACKUP="$MARIADB_VOLUMES/db_backup"
+
+# check the key assumptions
+if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
+   echo "Error: One of the following does not exist:"
+   echo "   $IOTSTACK"
+   echo "   $COMPOSE"
+   echo "This may indicate a problem with your installation."
+   exit -1
+fi
+
+# check that container is not running
+if isContainerRunning "$CONTAINER" ; then
+   echo "Warning: $CONTAINER should NOT be running at the start of a restore."
+   echo "         Please deactivate and try again."
+   exit -1
+fi
+
+# now we can begin
+echo "----- Starting $SCRIPT at $(date) -----"
+
+# make a temporary directory to unpack into
+RESTOREDIR=$(mktemp -d -p "$IOTSTACK")
+
+# unpack the general backup into the temporary directory
+echo "unpacking $RESTORE_TAR_GZ"
+sudo tar -x --same-owner -z -f "$RESTORE_TAR_GZ" -C "$RESTOREDIR"
+
+# did that result in anything being restores?
+if [ $(ls -1 "$RESTOREDIR" | wc -l) -gt 0 ] ; then
+
+   # erase the old persistent storage area
+   echo "Erasing $MARIADB_VOLUMES"
+   sudo rm -rf "$MARIADB_VOLUMES"
+
+   # create the backup directory
+   [ -d "$MARIADB_BACKUP" ] || sudo mkdir -m 755 -p "$MARIADB_BACKUP"
+   sudo chown $USER:$USER "$MARIADB_BACKUP"
+   sudo chmod 755 "$MARIADB_BACKUP"
+
+   # move backup files into place
+   echo "moving backup files into place"
+   mv "$RESTOREDIR"/* "$MARIADB_BACKUP"
+
+   # bring up the container (initialises everything else)
+   echo "activating $CONTAINER (temporarily)"
+   docker-compose -f "$COMPOSE" up -d "$CONTAINER"
+
+   # wait for the container to be ready
+   while ! docker exec "$CONTAINER" iotstack_healthcheck.sh >/dev/null 2>&1 ; do
+      echo "waiting for $CONTAINER to become ready"
+      sleep 1
+   done
+
+   # perform the restore
+   echo "telling $CONTAINER to restore from backup"
+   docker exec "$CONTAINER" bash -c 'mysql -p${MYSQL_ROOT_PASSWORD} ${MYSQL_DATABASE} </backup/backup.sql'
+
+   # take down the service
+   echo "deactivating $CONTAINER"
+   docker-compose -f "$COMPOSE" rm --force --stop -v "$CONTAINER"
+
+else
+   echo "$RESTOREDIR is empty - that would be the end of that"
+fi
+
+# tidy up
+rm -rf "$RESTOREDIR"
+
+echo "----- Finished $SCRIPT at $(date) -----"

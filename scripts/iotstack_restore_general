@@ -1,16 +1,34 @@
 #!/usr/bin/env bash
 
-# should not run as root
-[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
-
 # support user renaming of script
 SCRIPT=$(basename "$0")
 
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "$SCRIPT should NOT be run using sudo" && exit -1
+
+# assumptions that can be overridden
+IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
+DEFAULTFILENAME=${DEFAULTFILENAME:-"general-backup.tar.gz"}
+
+# the project name is the all-lower-case form of the folder name
+PROJECT=$(basename ${IOTSTACK,,})
+
+# useful function
+isStackUp() {
+   if COUNT=$( \
+      curl -s --unix-socket /var/run/docker.sock http://localhost/containers/json | \
+      jq -c ".[].Labels.\"com.docker.compose.project\" | contains(\"$1\")" | \
+      wc -l \
+   ) ; then
+      if [ $COUNT -gt 0 ] ; then
+         return 0
+      fi
+   fi
+   return 1
+}
+
 # snapshot the time
 RUNDATE=$(date +"%Y-%m-%d_%H%M")
-
-# the default name and correct extension type is
-DEFAULTFILENAME="general-backup.tar.gz"
 
 # $1 is required and is either path to a .tar.gz or path to a folder
 # $2 is optional and is the runtag (yyyy-mm-dd_hhmm.host-name)
@@ -42,8 +60,8 @@ if [ ! -e "$RESTORE_TAR_GZ" ] ; then
 fi
 
 # assumptions
-IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
-COMPOSE="$IOTSTACK/docker-compose.yml"
+COMPOSENAME="docker-compose.yml"
+COMPOSE="$IOTSTACK/$COMPOSENAME"
 SERVICESNAME="services"
 SERVICESROOT="$IOTSTACK/$SERVICESNAME"
 VOLUMESNAME="volumes"
@@ -59,10 +77,10 @@ fi
 if [ -e "$COMPOSE" ] ; then
 
    # yes! is IOTstack (or any part of it) running?
-   if [ $(docker-compose -f "$COMPOSE" ps | wc -l) -gt 2 ] ; then
+   if isStackUp "$PROJECT"; then
 
-      echo "Error: The stack should NOT be running during a restore"
-      echo "       Please deactivate the stack and try the restore again"
+      echo "Error: $PROJECT should NOT be running during a restore"
+      echo "       Please deactivate $PROJECT and try the restore again"
       exit -1
 
    fi

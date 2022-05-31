@@ -1,10 +1,30 @@
 #!/usr/bin/env bash
 
-# should not run as root
-[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
-
 # support user renaming of script
 SCRIPT=$(basename "$0")
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "$SCRIPT should NOT be run using sudo" && exit -1
+
+# assumptions that can be overridden
+IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
+
+# the project name is the all-lower-case form of the folder name
+PROJECT=$(basename ${IOTSTACK,,})
+
+# useful function
+isStackUp() {
+   if COUNT=$( \
+      curl -s --unix-socket /var/run/docker.sock http://localhost/containers/json | \
+      jq -c ".[].Labels.\"com.docker.compose.project\" | contains(\"$1\")" | \
+      wc -l \
+   ) ; then
+      if [ $COUNT -gt 0 ] ; then
+         return 0
+      fi
+   fi
+   return 1
+}
 
 USAGE=0
 
@@ -44,8 +64,9 @@ if [ $USAGE -ne 0 ] ; then
    exit -1
 fi
 
-if [ -z "$(which shyaml)" ] ; then
-   echo "Please re-run install_scripts.sh and follow the instructions to install \"shyaml\"."
+# check dependencies
+if [ -z "$(which shyaml)" -o -z "$(which curl)" -o -z "$(which jq)" ] ; then
+   echo "Missing dependencies. Please re-run install_scripts.sh."
    exit -1
 fi
 
@@ -68,8 +89,8 @@ CLOUD_PREFIX=${CLOUD_PREFIX:-"myuser@myhost.mydomain.com:/path/to/backup/directo
 CLOUD_PATH="$CLOUD_PREFIX/$BY_HOST_DIR"
 
 # assumptions
-IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
-COMPOSE="$IOTSTACK/docker-compose.yml"
+COMPOSENAME="docker-compose.yml"
+COMPOSE="$IOTSTACK/$COMPOSENAME"
 
 # check the key assumption
 if [ ! -d "$IOTSTACK" ] ; then
@@ -119,9 +140,9 @@ RESTART="NO"
 if [ -e "$COMPOSE" ] ; then
 
    # yes! is IOTstack (or any part of it) running?
-   if [ $(docker-compose -f "$COMPOSE" ps | wc -l) -gt 2 ] ; then
+   if isStackUp "$PROJECT" ; then
 
-      echo "Deactivating the stack"
+      echo "Deactivating $PROJECT"
       docker-compose -f "$COMPOSE" down
 
       # the stack should be re-launched on exit
@@ -134,11 +155,19 @@ fi
 # try to restore general backup (assumes general-backup.tar.gz)
 iotstack_restore_general "$RESTOREDIR" "$RUNTAG"
 
-# try to restore influx backup (assumes influx-backup.tar)
+# try to restore influxdb 1.x backup (assumes "influx-backup.tar" for
+# backwards compatibility, even though "influxdb-backup.tar" would be
+# more consistent)
 iotstack_restore_influxdb  "$RESTOREDIR" "$RUNTAG"
+
+# try to restore influxdb 2.x backup (assumes influxdb2-backup.tar)
+iotstack_restore_influxdb2  "$RESTOREDIR" "$RUNTAG"
 
 # try to restore nextcloud backup (assumes nextcloud-backup.tar.gz)
 iotstack_restore_nextcloud "$RESTOREDIR" "$RUNTAG"
+
+# try to restore mariadb backup (assumes mariadb-backup.tar.gz)
+iotstack_restore_mariadb "$RESTOREDIR" "$RUNTAG"
 
 # clean up the temporary restore directory
 echo "Cleaning up"

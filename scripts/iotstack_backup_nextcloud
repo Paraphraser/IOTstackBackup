@@ -1,15 +1,33 @@
 #!/usr/bin/env bash
 
-# should not run as root
-[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
-
 # support user renaming of script
 SCRIPT=$(basename "$0")
 
-# the default name and correct extension type is
-DEFAULTFILENAME="nextcloud-backup.tar.gz"
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "$SCRIPT should NOT be run using sudo" && exit -1
 
-# $1 is required and is either path to a .tar or the path to a folder
+# assumptions that can be overridden
+IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
+CONTAINER="${CONTAINER:-"nextcloud"}"
+DEFAULTFILENAME=${DEFAULTFILENAME:-"$CONTAINER-backup.tar.gz"}
+
+# the project name is the all-lower-case form of the folder name
+PROJECT=$(basename ${IOTSTACK,,})
+
+# the database container is
+CONTAINER_DB="${CONTAINER}_db"
+
+# useful function
+isContainerRunning() {
+   if STATUS=$(curl -s --unix-socket /var/run/docker.sock http://localhost/containers/$1/json | jq .State.Status) ; then
+      if [ "$STATUS" = "\"running\"" ] ; then
+         return 0
+      fi
+   fi
+   return 1
+}
+
+# $1 is required and is either path to a .tar.gz or the path to a folder
 # $2 is optional and is the runtag (yyyy-mm-dd_hhmm.host-name)
 # $3 is optional and overrides the default file name
 
@@ -39,15 +57,15 @@ if [ -e "$BACKUP_TAR_GZ" ] ; then
 fi
 
 # assumptions
-IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
-COMPOSE="$IOTSTACK/docker-compose.yml"
+COMPOSENAME="docker-compose.yml"
+COMPOSE="$IOTSTACK/$COMPOSENAME"
 VOLUMES="$IOTSTACK/volumes"
-NEXTCLOUD_VOLUMES="$VOLUMES/nextcloud"
+NEXTCLOUD_VOLUMES="$VOLUMES/$CONTAINER"
 NEXTCLOUD_DB_BACKUP="$NEXTCLOUD_VOLUMES/db_backup"
 
-# is nextcloud running?
-if [ $(docker-compose -f "$COMPOSE" ps nextcloud nextcloud_db | wc -l) -ne 4 ]; then
-   echo "Warning: nextcloud and nextcloud_db containers are not running - backup skipped"
+# check that containers are running
+if ! isContainerRunning "$CONTAINER" || ! isContainerRunning "$CONTAINER_DB" ; then
+   echo "Warning: $CONTAINER and/or $CONTAINER_DB not running - backup skipped"
    exit 0
 fi
 
@@ -93,12 +111,12 @@ for INCLUDE in $(cat $BACKUP_INCLUDE); do
 done
 
 # tell nextcloud to go into maintenance mode
-echo "Putting nextcloud into maintenance mode"
-docker exec -u www-data -it nextcloud php occ maintenance:mode --on
+echo "Putting $CONTAINER into maintenance mode"
+docker exec -u www-data -it "$CONTAINER" php occ maintenance:mode --on
 
 # tell MariaDB to take a backup
-echo "Telling nextcloud_db (MariaDB) to create a portable backup"
-docker exec nextcloud_db bash -c 'mysqldump --single-transaction -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE >/backup/backup.sql'
+echo "Telling $CONTAINER_DB (MariaDB) to create a portable backup"
+docker exec "$CONTAINER_DB" bash -c 'mysqldump --single-transaction -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE >/backup/backup.sql'
 
 # perform the backup (relative to ~/IOTstack/volumes/nextcloud)
 echo "Collecting the backup files into a tar.gz"
@@ -108,8 +126,8 @@ sudo tar \
   -T "$BACKUP_INCLUDE"
 
 # tell nextcloud to come out of maintenance mode
-echo "Taking nextcloud out of maintenance mode"
-docker exec -u www-data -it nextcloud php occ maintenance:mode --off
+echo "Taking $CONTAINER out of maintenance mode"
+docker exec -u www-data -it "$CONTAINER" php occ maintenance:mode --off
 
 # report size of archive
 du -h "$BACKUP_TAR_GZ"

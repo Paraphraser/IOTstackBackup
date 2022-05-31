@@ -8,7 +8,7 @@ SCRIPT=$(basename "$0")
 
 # assumptions that can be overridden
 IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
-CONTAINER="${CONTAINER:-"influxdb"}"
+CONTAINER="${CONTAINER:-"influxdb2"}"
 
 # the project name is the all-lower-case form of the folder name
 PROJECT=$(basename ${IOTSTACK,,})
@@ -27,49 +27,53 @@ isContainerRunning() {
 COMPOSENAME="docker-compose.yml"
 COMPOSE="$IOTSTACK/$COMPOSENAME"
 
+# the persistent store is
+INFLUXSTORE="$IOTSTACK/volumes/$CONTAINER"
+
 # the backup directory is
-BACKUPDIR="$IOTSTACK/backups"
+INFLUXBACKUP="$INFLUXSTORE/backup"
+
+# the engine directory is
+INFLUXENGINE="$INFLUXSTORE/data/engine"
 
 # ensure the backup directory exists
-[ -d "$BACKUPDIR" ] || mkdir "$BACKUPDIR"
+if [ ! -d "$INFLUXBACKUP" ] ; then
+   echo "$INFLUXBACKUP does not exist. This is usually created by docker-compose."
+   echo "Has $CONTAINER been initialised properly?"
+   exit -1
+fi
 
-# backup paths
-INFLUXBACKUPOLD="$BACKUPDIR/$CONTAINER/db_old"
-INFLUXBACKUPNEW="$BACKUPDIR/$CONTAINER/db"
-
-# the influx data directory is
-INFLUXDATA="$IOTSTACK/volumes/$CONTAINER/data"
-
-# is influx running?
+# is the container running?
 if isContainerRunning "$CONTAINER" ; then
 
 	# yes! prepare the environment
-	echo "Moving old $CONTAINER backups if they exist"
-	[ -d "$INFLUXBACKUPOLD" ] || sudo mkdir "$INFLUXBACKUPOLD"
-	sudo rm "$INFLUXBACKUPOLD"/*
-	sudo mv "$INFLUXBACKUPNEW"/* "$INFLUXBACKUPOLD"
-
-	# execute the backup command
+	echo "Clearing $INFLUXBACKUP"
+	sudo rm "$INFLUXBACKUP"/*
+	
+	# run a backup
 	echo "backing up $CONTAINER databases"
-	docker exec "$CONTAINER" influxd backup -portable /var/lib/influxdb/backup
+	docker exec "$CONTAINER" influx backup /var/lib/backup
 
+	# stop the container
 	echo "deactivating $CONTAINER"
 	docker-compose -f "$COMPOSE" rm --force --stop -v "$CONTAINER"
 
-	echo "removing the running database"
-	sudo rm -rf "$INFLUXDATA"
+	# erase the engine
+	echo "removing the running databases"
+	sudo rm -rf "$INFLUXENGINE"
 
-	echo "restarting $CONTAINER"
+	# start the container
+	echo "starting the container"
 	docker-compose -f "$COMPOSE" up -d "$CONTAINER"
-
-	# wait for influx to be ready
-	while ! docker exec "$CONTAINER" curl -s "http://localhost:8086" >/dev/null 2>&1 ; do
+	
+	# wait for the container to be ready
+	while ! docker exec "$CONTAINER" influx ping >/dev/null 2>&1 ; do
 	   echo "waiting for $CONTAINER to become ready"
 	   sleep 1
 	done
 
-	echo "reloading the influx databases"
-	docker exec "$CONTAINER" influxd restore -portable /var/lib/influxdb/backup
+	# restore from the backup just taken
+	docker exec "$CONTAINER" influx restore /var/lib/backup --full
 
 	echo "The $CONTAINER databases should be good to go"
 

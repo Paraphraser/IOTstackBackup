@@ -1,15 +1,33 @@
 #!/usr/bin/env bash
 
-# should not run as root
-[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
-
 # support user renaming of script
 SCRIPT=$(basename "$0")
 
-# the default name and correct extension type is
-DEFAULTFILENAME="nextcloud-backup.tar.gz"
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "$SCRIPT should NOT be run using sudo" && exit -1
 
-# $1 is required and is either path to a .tar or the path to a folder
+# assumptions that can be overridden
+IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
+CONTAINER="${CONTAINER:-"nextcloud"}"
+DEFAULTFILENAME=${DEFAULTFILENAME:-"$CONTAINER-backup.tar.gz"}
+
+# the project name is the all-lower-case form of the folder name
+PROJECT=$(basename ${IOTSTACK,,})
+
+# the database container is
+CONTAINER_DB="${CONTAINER}_db"
+
+# useful function
+isContainerRunning() {
+   if STATUS=$(curl -s --unix-socket /var/run/docker.sock http://localhost/containers/$1/json | jq .State.Status) ; then
+      if [ "$STATUS" = "\"running\"" ] ; then
+         return 0
+      fi
+   fi
+   return 1
+}
+
+# $1 is required and is either path to a .tar.gz or the path to a folder
 # $2 is optional and is the runtag (yyyy-mm-dd_hhmm.host-name)
 # $3 is optional and overrides the default file name
 
@@ -39,11 +57,10 @@ if [ ! -e "$RESTORE_TAR_GZ" ] ; then
 fi
 
 # assumptions
-IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
 COMPOSENAME="docker-compose.yml"
 COMPOSE="$IOTSTACK/$COMPOSENAME"
 VOLUMES="$IOTSTACK/volumes"
-NEXTCLOUD_VOLUMES="$VOLUMES/nextcloud"
+NEXTCLOUD_VOLUMES="$VOLUMES/$CONTAINER"
 NEXTCLOUD_DB_NAME="db"
 NEXTCLOUD_DB_BACKUP_NAME="db_backup"
 NEXTCLOUD_HTML_NAME="html"
@@ -60,14 +77,11 @@ if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
    exit -1
 fi
 
-# check that nextcloud is not running
-if [ $(docker-compose -f "$COMPOSE" ps nextcloud nextcloud_db | wc -l) -gt 2 ]; then
-
-   echo "Error: The nextcloud and nextcloud_db containers should NOT be"
-   echo "       running at the start of a restore. Please deactivate"
-   echo "       both containers and try the restore again."
-   exit -1
-
+# check that containers are not running
+if isContainerRunning "$CONTAINER" || isContainerRunning "$CONTAINER_DB" ; then
+   echo "Warning: Neither $CONTAINER nor $CONTAINER_DB should be running at"
+   echo "         the start of a restore. Please deactivate both and try again."
+   exit 0
 fi
 
 # now we can begin
@@ -103,7 +117,7 @@ if [ -d "$NEXTCLOUD_DB_RESTOREDIR" ] ; then
       sudo rm -rf "$NEXTCLOUD_DB_BACKUP"/*
    fi
 
-   # so does the nextcloud_db runtime directory
+   # so should the nextcloud_db runtime directory
    if [ $(ls -1 "$NEXTCLOUD_DB" | wc -l) -gt 0 ] ; then
       echo "Erasing $NEXTCLOUD_DB"
       sudo rm -rf "$NEXTCLOUD_DB"/*
@@ -152,19 +166,19 @@ echo "cleaning up intermediate files"
 rm -rf "$RESTOREDIR"
 
 # bring up the nextcloud_db container (done early to give time to start)
-echo "activating nextcloud_db (temporarily)"
-docker-compose -f "$COMPOSE" up -d nextcloud_db
+echo "activating $CONTAINER_DB (temporarily)"
+docker-compose -f "$COMPOSE" up -d "$CONTAINER_DB"
 
 # extra stabilisation time - prophylactic
 sleep 3
 
 # wait for mariadb (nextcloud_db) to be ready for business
-echo "waiting for nextcloud_db to start"
+echo "waiting for $CONTAINER_DB to start"
 RETRIES=30
 while : ; do
 
    # see if nextcloud_db reports itself ready for business
-   docker exec nextcloud_db iotstack_healthcheck.sh >/dev/null 2>&1
+   docker exec "$CONTAINER_DB" iotstack_healthcheck.sh >/dev/null 2>&1
 
    # is the container ready?
    if [ $? -ne 0 ] ; then
@@ -181,7 +195,7 @@ while : ; do
       fi
 
       # retries exhausted - declare failure
-      echo "nextcloud_db did not come up properly - unable to reload database"
+      echo "$CONTAINER_DB did not come up properly - unable to reload database"
       exit -1
 
    fi
@@ -195,16 +209,16 @@ done
 sleep 3
 
 # tell nextcloud_db to perform the restore
-echo "telling nextcloud_db to restore a portable backup"
-docker exec nextcloud_db bash -c 'mysql -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE </backup/backup.sql'
+echo "telling $CONTAINER_DB to restore a portable backup"
+docker exec "$CONTAINER_DB" bash -c 'mysql -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE </backup/backup.sql'
 
 # extra stabilisation time - prophylactic
 sleep 3
 
-echo "activating nextcloud (temporarily)"
-docker-compose -f "$COMPOSE" up -d nextcloud
+echo "activating $CONTAINER (temporarily)"
+docker-compose -f "$COMPOSE" up -d "$CONTAINER"
 
-echo "waiting for nextcloud to start"
+echo "waiting for $CONTAINER to start"
 RETRIES=30
 while : ; do
 
@@ -231,8 +245,8 @@ while : ; do
    fi
 
    # retries exhausted - declare failure
-   echo "nextcloud did not come up properly"
-   echo " - unable to ensure Nextcloud is taken out of maintenance mode"
+   echo "$CONTAINER did not come up properly"
+   echo " - unable to ensure $CONTAINER is taken out of maintenance mode"
    exit -1
 
 done
@@ -240,11 +254,11 @@ done
 # extra stabilisation time - prophylactic
 sleep 3
 
-echo "Taking nextcloud out of maintenance mode"
-docker exec -u www-data -it nextcloud php occ maintenance:mode --off
+echo "Taking $CONTAINER out of maintenance mode"
+docker exec -u www-data -it "$CONTAINER" php occ maintenance:mode --off
 
 # take down nextcloud service
-echo "deactivating nextcloud and nextcloud_db"
-docker-compose -f "$COMPOSE" rm --force --stop -v nextcloud nextcloud_db
+echo "deactivating $CONTAINER and $CONTAINER_DB"
+docker-compose -f "$COMPOSE" rm --force --stop -v "$CONTAINER" "$CONTAINER_DB"
 
 echo "----- Finished $SCRIPT at $(date) -----"
