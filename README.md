@@ -200,7 +200,7 @@ Nextcloud backup and restore was introduced in September 2021; MariaDB in May 20
 	* MariaDB
 
 		```bash
-		$ cat ~/IOTstack/.templates/nextcloud/service.yml
+		$ cat ~/IOTstack/.templates/mariadb/service.yml
 		```
 
 		At the time of writing, the new menu version it looked like this:
