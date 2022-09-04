@@ -694,6 +694,25 @@ The script will:
 
 If this script returns sensible results that reflect what you have placed in the configuration file then you can be reasonably confident that the backup and restore scripts will behave in a way that implements your intention.
 
+#### <a name="configChecking"></a>if you get a traceback …
+
+`show_iotstackbackup_configuration` uses the `shyaml` package to extract information from your [configuration file](#configFile). In turn, `shyaml` calls a YAML parsing API to scan your [configuration file](#configFile) and turn it into structures that can be interpreted by `shyaml`.
+
+If the YAML API encounters a fundamental problem in your [configuration file](#configFile), it will cause `shyaml` to abort with a traceback.
+
+Because `show_iotstackbackup_configuration` calls `shyaml` five times, you may get as many as five tracebacks and the sheer volume of output may seem overwhelming. However, you can ignore most of it. Just look for lines similar to the following:
+
+```
+yaml.scaller.ScannerError: while parsing …
+  in "<stdin>", line «x», column «y»
+```
+
+That is telling you where the problem is. Here is a checklist of common problems with YAML files:
+
+1. Using <kbd>tab</kbd> characters for indentation. You **must** use <kbd>space</kbd> characters.
+2. Using “curly quotes” instead of "straight quotes" when encapsulating string values. This can happen if you use a general purpose text editor that has its own "curly quotes" setting or respects an equivalent operating-system level setting. You must use straight quotes.
+3. Using a Windows-based text editor which appends 0x0D0A (CR+LF) line-endings rather than Unix-standard 0x0A (LF) line-endings.
+
 ## <a name="referenceTables"></a>Reference tables
 
 ### <a name="refExtensions"></a>Table 1: assumed backup file extensions
@@ -934,12 +953,12 @@ $ iotstack_restore «runtag» {«by_host_dir»}
 	iot-hub
 	```
 
-	If you pass a [about «runtag»](#aboutRuntag) which can't be parsed to extract the «by\_host\_dir» then you must also pass a valid «by\_host\_dir».
+	If you pass a [«runtag»](#aboutRuntag) which can't be parsed to extract the «by\_host\_dir» then you must also pass a valid «by\_host\_dir».
 
 The script:
 
 * Creates a temporary directory within `~/IOTstack` (to ensure everything winds up on the same file-system)
-* Uses your chosen method to copy files matching the pattern «runtag».\* into the temporary directory
+* Uses your chosen method to copy files matching the pattern `«runtag».*` into the temporary directory
 * Deactivates your stack (if at least one container is running)
 * Invokes [`iotstack_restore_general`](#iotstackRestoreGeneral)
 * Invokes [`iotstack_restore_influxdb`](#iotstackRestoreContainer)
