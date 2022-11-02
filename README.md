@@ -120,7 +120,7 @@ You will either see a path like:
 /home/pi/.local/bin/iotstack_backup
 ```
 
-or get "silence". If `which` does not return a path, try logging-out and in again to give your `~/.profile` the chance to add `~/.local/bin` to your search path, and then repeat the test.
+or get "silence". If `which` does not return a path, try logging-out and in again to give your `~/.profile` or `~/.bashrc` the chance to add `~/.local/bin` to your search path, and then repeat the test.
 
 > There are many reasons why a folder like `~/.local/bin` might not be in your search path. It is beyond the scope of this document to explore all the possibilities. Google is your friend.
 
@@ -279,9 +279,7 @@ Nextcloud backup and restore was introduced in September 2021; MariaDB in May 20
 
 ### <a name="influxDB2prep"></a>Preparing for InfluxDB 2 backups
 
-InfluxDB&nbsp;2 support was added to IOTstackBackup in May 2022. However, InfluxDB&nbsp;2 is still to be added to the IOTstack templates and menu system.
-
-See also [IOTstack: InfluxDB 2 experiments](#https://gist.github.com/Paraphraser/aef2dbcc37f8f895ec7ead1068fd8bf1).
+InfluxDB&nbsp;2 support was added to IOTstackBackup in May 2022. See also [IOTstack: InfluxDB 2 experiments](#https://gist.github.com/Paraphraser/aef2dbcc37f8f895ec7ead1068fd8bf1).
 
 ### <a name="installDependencies"></a>Install dependencies
 
@@ -373,7 +371,9 @@ The `retain` keyword is an instruction to the backup script as to how many previ
 
 This, in turn, will *influence* the number of backups retained on the remote host if you choose either the *rclone* or *rsync* options.
 
-To repeat: `retain` only affects what is retained on the Raspberry Pi. 
+To repeat:
+
+* `retain` only controls what is retained on the Raspberry Pi. What happens on remote hosts depends on the `method` you choose in the next step.
 
 ### <a name="chooseMethods"></a>Choose your backup and restore methods
 
@@ -445,9 +445,9 @@ Once you are sure your working PREFIX is correct, use your favourite text editor
 *rsync* uses *scp* but performs more work. The essential difference between the two methods is what happens during the final stages of a backup:
 
 * *scp* copies the individual **files** produced by *that* backup to the remote machine; while
-* *rsync* synchronises the `~/IOStack/backup` **directory** on the Raspberry Pi with the backup directory on the remote machine.
+* *rsync* synchronises the `~/IOStack/backups` **directory** on the Raspberry Pi with the backup directory on the remote machine.
 
-The `~/IOStack/backup` directory is trimmed at the end of each backup run. The trimming occurs **after** *rsync* runs so, in practice the backup directory on the remote machine will usually have one more backup than the Raspberry Pi.
+The `~/IOStack/backups` directory is trimmed at the end of each backup run. The trimming occurs **after** *rsync* runs so, in practice the backup directory on the remote machine will usually have one more backup than the Raspberry Pi.
 
 You can install a template [configuration file](#configFile) for *rsync* like this:
 
@@ -642,7 +642,7 @@ You should test connectivity like this:
 	* the word "dropbox" is assumed to be the **name** you assigned to the remote when you ran `rclone config`. If you capitalised "Dropbox" or gave it another name like "MyDropboxAccount" then you will need to substitute accordingly. It is **case sensitive**!
 	* the right hand side (after the colon) should not contain embedded spaces or other characters that are open to misinterpretation by `bash`.
 	* `path/to/backups` is relative to top of your Dropbox structure in the cloud. You should not use absolute paths (ie starting with a "/").
-	* Remember that `path/to/backups` will be treated as a [prefix](#keyPrefix) and each machine where you run [`iotstack_backup`](#iotstackBackup) will append its HOSTNAME to the prefix as a sub-folder.
+	* Remember that `path/to/backups` will be treated as a [prefix](#keyPrefix). Each machine where you run [`iotstack_backup`](#iotstackBackup) will append its HOSTNAME to the prefix as a sub-folder.
 
 2. Test communication with Dropbox:
 
@@ -772,7 +772,7 @@ $ iotstack_backup {«runtag»} {by_host_id}
 
 * *by\_host\_dir* is an _optional_ argument which defaults to the value of the HOSTNAME environment variable.
 
-In general, you should run `iotstack_backup` without parameters. Be sure you know what you are doing before you start experimenting with parameters.
+In general, you should run `iotstack_backup` without parameters. If you decide to use parameters, please make sure you test thoroughly before you rely on the result in a production system.
 
 The script invokes:
 
@@ -860,7 +860,7 @@ Providing only that it can identify a viable IOTstack installation, this script 
 	* `pihole.restored`
 	* `lost+found`
 
-	† omitted because the container is not copy-safe but, as yet, there is no container-specific backup script. If you run either and want to take the risk, just remove the exclusion from the script.
+	† omitted because the container is not copy-safe but, as yet, there is no container-specific backup script. If you run either container and want to take the risk, just remove the exclusion from the script.
 
 ### <a name="iotstackBackupContainer"></a>iotstack\_backup\_*«container»*
 
