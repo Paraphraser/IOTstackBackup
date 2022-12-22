@@ -471,7 +471,8 @@ restore:
 
 The definition of the `prefix` key is the same as *scp* so simply follow the [*scp*](#scpOption) instructions for determining the actual prefix and testing basic connectivity.
 
-#### *rclone* (Dropbox)<a name="rcloneOption">&nbsp;</a>
+<a name="rcloneOption"></a>
+#### *rclone* (Dropbox)
 
 Selecting *rclone* unleashes the power of that package. However, this guide only covers setting up a Dropbox remote. For more information about *rclone*, see:
 
