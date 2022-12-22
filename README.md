@@ -86,9 +86,11 @@ Subversion               | no
 
 	- [periodic maintenance](#periodicMaintenance)
 
-## <a name="setup">Setup</a>
+<a name="setup"></a>
+## Setup
 
-### <a name="downloadRepository">Download repository</a>
+<a name="downloadRepository"></a>
+### Download repository
 
 This repository can be cloned anywhere on your Raspberry Pi but I recommend the `~/.local` directory:
 
@@ -124,7 +126,8 @@ or get "silence". If `which` does not return a path, try logging-out and in agai
 
 > There are many reasons why a folder like `~/.local/bin` might not be in your search path. It is beyond the scope of this document to explore all the possibilities. Google is your friend.
 
-### <a name="nextcloudMariaDBprep">Preparing for Nextcloud and MariaDB backups</a>
+<a name="nextcloudMariaDBprep"></a>
+### Preparing for Nextcloud and MariaDB backups
 
 Nextcloud backup and restore was introduced in September 2021; MariaDB in May 2022. Both have several dependencies on IOTstack which you should check before your first backup run.
 
@@ -277,11 +280,13 @@ Nextcloud backup and restore was introduced in September 2021; MariaDB in May 20
 
 	* This assumes you did Step 1 (the `git pull` to bring your local copy of the IOTstack repository is fully up-to-date).
 
-### <a name="influxDB2prep">Preparing for InfluxDB 2 backups</a>
+<a name="influxDB2prep"></a>
+### Preparing for InfluxDB 2 backups
 
 InfluxDB&nbsp;2 support was added to IOTstackBackup in May 2022. See also [IOTstack: InfluxDB 2 experiments](#https://gist.github.com/Paraphraser/aef2dbcc37f8f895ec7ead1068fd8bf1).
 
-### <a name="installDependencies">Install dependencies</a>
+<a name="installDependencies"></a>
+### Install dependencies
 
 Make sure your system satisfies the following dependencies:
 
@@ -297,7 +302,8 @@ Some (or all) may be installed already on your Raspberry Pi. Some things to note
 2. *shyaml* is a YAML parser (analogous to *jq* for JSON files).
 3. If you prefer, you can omit the `sudo` when installing `shyaml`. *With* `sudo`, the tool is installed globally; *without,* it is installed for the current user.
 
-### <a name="configFile">The configuration file</a>
+<a name="configFile"></a>
+### The configuration file
 
 The [`iotstack_backup`](#iotstackBackup) and [`iotstack_restore`](#iotstackRestore) scripts depend on a configuration file at the path:
 
@@ -307,7 +313,8 @@ The [`iotstack_backup`](#iotstackBackup) and [`iotstack_restore`](#iotstackResto
 
 A script is provided to initialise a template configuration but you will need to edit the file by hand once you choose your backup and restore methods. The configuration file follows the normal YAML syntax rules. In particular, you must use spaces for indentation. You must not use tabs.
 
-#### <a name="keyMethod">method:</a>
+<a name="keyMethod"></a>
+#### method:
 
 What "method" means depends on your perspective. For **backup** operations you have a choice of:
 
@@ -323,7 +330,8 @@ For **restore** operations, your choices are:
 
 Although the templates assume you will use the same method for both backup and restore, this is not a requirement. You are free to [mix and match](#mixnmatch).
 
-#### <a name="keyPrefix">prefix:</a>
+<a name="keyPrefix"></a>
+#### prefix:
 
 The "prefix" keyword means:
 
@@ -365,7 +373,8 @@ Notes:
 * Both the path portion of the prefix (eg `IOTstackBackups`) and all per-machine subdirectories (eg `iot-hub`) should exist on the remote machine **before** you run [`iotstack_backup`](#iotstackBackup) for the first time on any Raspberry Pi.
 * The *rclone* method *will* automatically create missing directories on the remote host but the *scp* and *rsync* methods will **not**. You have to create the directories by hand.
 
-#### <a name="keyRetain">retain:</a>
+<a name="keyRetain"></a>
+#### retain:
 
 The `retain` keyword is an instruction to the backup script as to how many previous backups it should retain *on the Raspberry Pi*.
 
@@ -375,9 +384,11 @@ To repeat:
 
 * `retain` only controls what is retained on the Raspberry Pi. What happens on remote hosts depends on the `method` you choose in the next step.
 
-### <a name="chooseMethods">Choose your backup and restore methods</a>
+<a name="chooseMethods"></a>
+### Choose your backup and restore methods
 
-#### <a name="scpOption">*scp*</a>
+<a name="scpOption"></a>
+#### *scp*
 
 *scp* (secure copy) saves the results of *this* backup run. Backup files copied to the remote will be retained on the remote until *you* take some action to remove them.
 
@@ -440,7 +451,8 @@ Your goal is that both of the *scp* commands should work without prompting for p
 
 Once you are sure your working PREFIX is correct, use your favourite text editor to copy the values to the [configuration file](#configFile).
 
-#### <a name="rsyncOption">*rsync*</a>
+<a name="rsyncOption"></a>
+#### *rsync*
 
 *rsync* uses *scp* but performs more work. The essential difference between the two methods is what happens during the final stages of a backup:
 
@@ -657,7 +669,8 @@ You should test connectivity like this:
 
 Once you are sure your working PREFIX is correct, use your favourite text editor to copy the values to the [configuration file](#configFile).
 
-#### <a name="mixnmatch">mix and match</a>
+<a name="mixnmatch"></a>
+#### mix and match
 
 Although the templates assume the same method will be used for both backup and restore, it does not have to be that way. For starters, while *rsync* uses *scp* to synchronise the `~/IOTstack/backups` folder with the remote host, *rsync* has no "selective reverse synchronisation" functionality that can be used during restore so `method: "RSYNC"` simply invokes `method: "SCP"` during restores.
 
@@ -678,7 +691,8 @@ restore:
   prefix: "user@host.domain.com:path/to/backups"
 ```
 
-### <a name="configCheck">Check your configuration</a>
+<a name="configCheck"></a>
+### Check your configuration
 
 You can use the following command to check your [configuration file](#configFile): 
 
@@ -695,7 +709,8 @@ The script will:
 
 If this script returns sensible results that reflect what you have placed in the configuration file then you can be reasonably confident that the backup and restore scripts will behave in a way that implements your intention.
 
-#### <a name="configChecking">if you get a traceback …</a>
+<a name="configChecking"></a>
+#### if you get a traceback …
 
 `show_iotstackbackup_configuration` uses the `shyaml` package to extract information from your [configuration file](#configFile). In turn, `shyaml` calls a YAML parsing API to scan your [configuration file](#configFile) and turn it into structures that can be interpreted by `shyaml`.
 
@@ -714,9 +729,11 @@ That is telling you where the problem is. Here is a checklist of common problems
 2. Using “curly quotes” instead of "straight quotes" when encapsulating string values. This can happen if you use a general purpose text editor that has its own "curly quotes" setting or respects an equivalent operating-system level setting. You must use straight quotes.
 3. Using a Windows-based text editor which appends 0x0D0A (CR+LF) line-endings rather than Unix-standard 0x0A (LF) line-endings.
 
-## <a name="referenceTables">Reference tables</a>
+<a name="referenceTables"></a>
+## Reference tables
 
-### <a name="refExtensions">Table 1: assumed backup file extensions</a>
+<a name="refExtensions"></a>
+### Table 1: assumed backup file extensions
 
 «script»                    | «extensions»
 :--------------------------:|:------------------------:
@@ -728,7 +745,8 @@ That is telling you where the problem is. Here is a checklist of common problems
 
 Each extension implies the file's internal format. Violating this convention leads to a mess.
 
-### <a name="refFilenames">Table 2: default backup file names</a>
+<a name="refFilenames"></a>
+### Table 2: default backup file names
 
 «script»                    | «defaultFileName»
 :--------------------------:|:------------------------:
@@ -740,7 +758,8 @@ Each extension implies the file's internal format. Violating this convention lea
 
 † The default file name for InfluxDB&nbsp;1.8 is an exception. It would be more consistent to use `influxdb-backup.tar` but maintaining backwards compatibility demands `influx-backup.tar`.
 
-### <a name="refContainers">Table 3: associated containers</a>
+<a name="refContainers"></a>
+### Table 3: associated containers
 
 «script»                    | associated container(s)
 :--------------------------:|:------------------------:
@@ -749,7 +768,8 @@ Each extension implies the file's internal format. Violating this convention lea
 `iotstack_backup_mariadb`   | `mariadb`
 `iotstack_backup_nextcloud` | `nextcloud` + `nextcloud_db`
 
-## <a name="backupSide">The backup side of things</a>
+<a name="backupSide"></a>
+## The backup side of things
 
 The backup side of things comprises a number of scripts with the prefix `iotstack_backup_` that are invoked by an umbrella script named `iotstack_backup`, which also handles copying of the backup files to another host.
 
@@ -757,7 +777,8 @@ In general, [`iotstack_backup`](#iotstackBackup) is the script you should call.
 
 > Acknowledgement: the backup scripts were based on [Graham Garner's backup script](https://github.com/gcgarner/IOTstack/blob/master/scripts/docker_backup.sh) as at 2019-11-17.
 
-### <a name="iotstackBackup">iotstack\_backup (umbrella script)</a>
+<a name="iotstackBackup"></a>
+### iotstack\_backup (umbrella script)
 
 Usage:
 
@@ -787,7 +808,8 @@ The results of those are placed in `~/IOTstack/backups` along with a log file co
 
 The files are copied to the remote host using the method you defined in the [configuration file](#configFile), and then `~/IOTstack/backups` is cleaned up to remove older backups.
 
-### <a name="iotstackBackupGeneral">iotstack\_backup\_general</a>
+<a name="iotstackBackupGeneral"></a>
+### iotstack\_backup\_general
 
 Usage (three forms):
 
@@ -863,7 +885,8 @@ Providing only that it can identify a viable IOTstack installation, this script 
 
 	† omitted because the container is not copy-safe but, as yet, there is no container-specific backup script. If you run either container and want to take the risk, just remove the exclusion from the script.
 
-### <a name="iotstackBackupContainer">iotstack\_backup\_*«container»*</a>
+<a name="iotstackBackupContainer"></a>
+### iotstack\_backup\_*«container»*
 
 Usage (three forms):
 
@@ -922,13 +945,15 @@ This is mainly because the database engines participate in the backup process so
 
 The [`iotstack_backup`](#iotstackBackup) umbrella script also relies on this behaviour. It calls all the subordinate scripts unconditionally, irrespective of whether the associated containers are even mentioned in your compose file. If and only if the database engine is running is it backed-up.
 
-## <a name="restoreSide">The restore side of things</a>
+<a name="restoreSide"></a>
+## The restore side of things
 
 The restore side of things comprises a number of scripts with the prefix `iotstack_restore_` that are invoked by an umbrella script named `iotstack_restore`, which also handles fetching of backup files from another host.
 
 In general, [`iotstack_restore`](#iotstackRestore) is the script you should call.
 
-### <a name="iotstackRestore">iotstack\_restore (umbrella script)</a>
+<a name="iotstackRestore"></a>
+### iotstack\_restore (umbrella script)
 
 Usage:
 
@@ -976,7 +1001,8 @@ The subordinate `iotstack_restore_general` and `iotstack_restore_«container»` 
 
 Each script assumes that the path to its backup file can be derived from those two arguments. This will be true if the backup was created by [`iotstack_backup`](#iotstackBackup) but is something to be aware of if you roll your own solution.
 
-### <a name="iotstackRestoreGeneral">iotstack\_restore\_general</a>
+<a name="iotstackRestoreGeneral"></a>
+### iotstack\_restore\_general
 
 Usage (three forms):
 
@@ -1073,7 +1099,8 @@ This is to cater for two distinct situations:
 * On a bare-metal restore, `~/IOTstack` will not contain any of these files so everything in the backup will be restored "as is".
 * If a file is already present in `~/IOTstack` then it may be the same as the backup or contain customisations that should not be overwritten. If the two files compare different, the file from the backup is restored with a date-time suffix. If you want to use a file that has a date-time suffix, you have to rename it by hand.
 
-### <a name="iotstackRestoreContainer">iotstack\_restore\_*«container»*</a>
+<a name="iotstackRestoreContainer"></a>
+### iotstack\_restore\_*«container»*
 
 Usage (three forms):
 
@@ -1143,7 +1170,8 @@ Note:
 	
 	This is also why [`iotstack_restore_general`](#iotstackRestoreGeneral) runs first, because it is assumed to guarantee the presence of an appropriate compose file, particularly during a bare-metal restore. 
 
-## <a name="bareMetalRestore">Bare-metal restore</a>
+<a name="bareMetalRestore"></a>
+## Bare-metal restore
 
 Scenario. Your SD card wears out, or your Raspberry Pi emits magic smoke, or you decide the time has come for a fresh start. 
 
@@ -1163,7 +1191,8 @@ Scenario. Your SD card wears out, or your Raspberry Pi emits magic smoke, or you
 2. Run [`iotstack_restore`](#iotstackRestore) with the [«runtag»](#aboutRuntag) of a recent backup. Among other things, this will recover `docker-compose.yml` (ie there is no need to run the menu and re-select your services). As the various database containers are restored, a side-effect is to pull the container's image from DockerHub.
 3. Bring up the stack. That pulls any remaining images from DockerHub and, as the saying goes, you're "up, up and away".
 
-## <a name="envVars">Environment variables</a>
+<a name="envVars"></a>
+## Environment variables
 
 IOTstackBackup supports the following environment variables:
 
@@ -1227,7 +1256,8 @@ IOTstackBackup supports the following environment variables:
 
 	> You will need to edit the [`iotstack_backup`](#iotstackBackup) and [`iotstack_restore`](#iotstackRestore) umbrella scripts if you want `mydb` processed automatically.
 
-## <a name="iotstackReloadInflux">Reloading Influx databases "in situ"</a>
+<a name="iotstackReloadInflux"></a>
+## Reloading Influx databases "in situ"
 
 Reloading InfluxDB databases can help address some performance issues and allow you to convert between indexing modes.
 
@@ -1255,9 +1285,11 @@ Each script:
 
 There is some downtime while this process runs but it is kept to a minimum.
 
-## <a name="endNotes">Notes</a>
+<a name="endNotes"></a>
+## Notes
 
-### <a name="aboutRuntag">about «runtag»</a>
+<a name="aboutRuntag"></a>
+### about «runtag»
 
 When omitted as an argument to [`iotstack_backup`](#iotstackBackup), «runtag» defaults to the current date-time value in the format *yyyy-mm-dd_hhmm* followed by the host name as determined from the HOSTNAME environment variable. For example:
 
@@ -1284,7 +1316,8 @@ The period being special also implies:
 
 The scripts will **not** protect you if you ignore these rules. You **will** create a mess and you have been warned!
 
-### <a name="nextcloudMaintenanceMode">if Nextcloud gets stuck in "maintenance mode"</a>
+<a name="nextcloudMaintenanceMode"></a>
+### if Nextcloud gets stuck in "maintenance mode"
 
 If Nextcloud backup fails, you may find that Nextcloud has been left in "maintenance mode" and you are locked out. To take Nextcloud out of maintenance mode:
 
@@ -1292,7 +1325,8 @@ If Nextcloud backup fails, you may find that Nextcloud has been left in "mainten
 $ docker exec -u www-data -it nextcloud php occ maintenance:mode --off
 ```
 
-### <a name="usingcron">using cron to run iotstack\_backup</a>
+<a name="usingcron"></a>
+### using cron to run iotstack\_backup
 
 Resources:
 
@@ -1344,7 +1378,8 @@ Setup:
 	$ crontab my-crontab.txt
 	```
 
-#### <a name="cronLogging">understanding logging when cron is involved</a>
+<a name="cronLogging"></a>
+#### understanding logging when cron is involved
 
 Normally, [`iotstack_backup`](#iotstackBackup) writes its log to the path:
 
@@ -1364,7 +1399,8 @@ That can't happen when [`iotstack_backup`](#iotstackBackup) is started by cron b
 
 You may also find a "You have new mail" message on your next login.
 
-### <a name="periodicMaintenance">periodic maintenance</a>
+<a name="periodicMaintenance"></a>
+### periodic maintenance
 
 From time to time, you should synchronise your local copy of the IOTstackBackup repository with GitHub and then reinstall the scripts:
 
