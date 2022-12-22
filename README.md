@@ -86,7 +86,7 @@ Subversion               | no
 
 	- [periodic maintenance](#periodicMaintenance)
 
-# Setup {setup}
+## <a name="setup">Setup</a>
 
 ### <a name="downloadRepository">Download repository</a>
 
@@ -471,7 +471,7 @@ restore:
 
 The definition of the `prefix` key is the same as *scp* so simply follow the [*scp*](#scpOption) instructions for determining the actual prefix and testing basic connectivity.
 
-#### *rclone* (Dropbox) {rcloneOption}
+#### <a name="rcloneOption">*rclone* (Dropbox)</a>
 
 Selecting *rclone* unleashes the power of that package. However, this guide only covers setting up a Dropbox remote. For more information about *rclone*, see:
 
