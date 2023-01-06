@@ -1,0 +1,130 @@
+[
+    {
+        "id": "139f6648a7cddeaf",
+        "type": "tab",
+        "label": "Quota Example",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "4b440bc827423850",
+        "type": "mqtt in",
+        "z": "139f6648a7cddeaf",
+        "name": "/home/quota/[system]",
+        "topic": "/home/quota/#",
+        "qos": "2",
+        "datatype": "json",
+        "broker": "c5d29fb5.89907",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 140,
+        "y": 100,
+        "wires": [
+            [
+                "23daf8c09b8d04ad"
+            ]
+        ]
+    },
+    {
+        "id": "ce6bf8e1423ff554",
+        "type": "function",
+        "z": "139f6648a7cddeaf",
+        "name": "Check Quota 90%",
+        "func": "// declare threshold\nconst threshold = 90.0;\n\n// calculate percent used\nvar used = 100.0 * msg.payload.used / msg.payload.total;\n\n// set the email message subject line\nmsg.topic = msg.system + \" space utilisation\"\n\n// check over threshold\nif (used > threshold) {\n    msg.payload = \"Space used exceeds \" + threshold + \"% threshold\";\n    return [msg, null];\n}\n\n// otherwise report in bounds\nmsg.payload = \"Space used is below \" + threshold + \" % threshold\";\nreturn [null, msg];\n",
+        "outputs": 2,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 310,
+        "y": 260,
+        "wires": [
+            [
+                "bc4a31d2ce5a8ff2"
+            ],
+            [
+                "bc4a31d2ce5a8ff2"
+            ]
+        ],
+        "outputLabels": [
+            "above threshold",
+            "below threshold"
+        ]
+    },
+    {
+        "id": "bc4a31d2ce5a8ff2",
+        "type": "e-mail",
+        "z": "139f6648a7cddeaf",
+        "server": "smtp.domain.com",
+        "port": "465",
+        "secure": true,
+        "tls": false,
+        "name": "user@domain.com",
+        "dname": "email notification",
+        "x": 570,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "23daf8c09b8d04ad",
+        "type": "change",
+        "z": "139f6648a7cddeaf",
+        "name": "extract system name",
+        "rules": [
+            {
+                "t": "set",
+                "p": "system",
+                "pt": "msg",
+                "to": "$split(msg.topic,'/')[-1]",
+                "tot": "jsonata"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 240,
+        "y": 180,
+        "wires": [
+            [
+                "ce6bf8e1423ff554"
+            ]
+        ],
+        "info": "# Extract System Name\n\nThe syntax:\n\n```\n$split(msg.topic,'/')[-1]\n```\n\nassumes the incoming topic string is like:\n\n```\n/something/quota/system\n```\n\nThe `$split(msg.topic,'/')` function will crack that string about the \"/\" separator and return an array of four elements:\n\n* index=0, a null string (everything before the first `/` although some people prefer to omit the leading `/` from their topic strings)\n* index=1, the string \"something\"\n* index=2, the string \"quota\"\n* index=3, the string \"system\"\n\nThe trailing `[-1]` returns the string at the last index position which is \"system\"."
+    },
+    {
+        "id": "c5d29fb5.89907",
+        "type": "mqtt-broker",
+        "name": "Docker MQTT",
+        "broker": "mosquitto",
+        "port": "1883",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "compatmode": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    }
+]

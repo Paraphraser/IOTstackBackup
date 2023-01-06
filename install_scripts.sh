@@ -47,6 +47,20 @@ for D in curl jq wget ; do
    fi
 done
 
+# check if mosquitto_pub is available
+if [ -z "$(which mosquitto_pub)" ] ; then
+
+   echo ""
+   echo "=========================================================================="
+   echo "IOTstackBackup depends on \"mosquitto_pub\" which does not seem to be installed"
+   echo "on your system. Please run the following command:"
+   echo ""
+   echo "   sudo apt install mosquitto-clients"
+   echo ""
+   echo "=========================================================================="
+
+fi
+
 # check if shyaml is installed
 if [ -z "$(which shyaml)" ] ; then
 
@@ -59,6 +73,20 @@ if [ -z "$(which shyaml)" ] ; then
    echo ""
    echo "You can omit the \"sudo\" if you only want \"shyaml\" to be installed for the"
    echo "local user instead of being made available system-wide."
+   echo "=========================================================================="
+
+fi
+
+# check for rclone
+if [ -z "$(which rclone)" ] ; then
+
+   echo ""
+   echo "=========================================================================="
+   echo "If you intend to use RCLONE with IOTstackBackup, please note that it is not"
+   echo "installed on your system. Please run the following command:"
+   echo ""
+   echo "   https://rclone.org/install.sh | sudo bash"
+   echo ""
    echo "=========================================================================="
 
 fi

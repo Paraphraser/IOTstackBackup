@@ -86,6 +86,8 @@ Subversion               | no
 
 	- [periodic maintenance](#periodicMaintenance)
 
+- [Tutorials & Guides](#tutorials)
+
 <a name="setup"></a>
 ## Setup
 
@@ -283,7 +285,10 @@ Nextcloud backup and restore was introduced in September 2021; MariaDB in May 20
 <a name="influxDB2prep"></a>
 ### Preparing for InfluxDB 2 backups
 
-InfluxDB&nbsp;2 support was added to IOTstackBackup in May 2022. See also [IOTstack: InfluxDB 2 experiments](#https://gist.github.com/Paraphraser/aef2dbcc37f8f895ec7ead1068fd8bf1).
+InfluxDB&nbsp;2 support was added to IOTstackBackup in May 2022. See also:
+
+* [IOTstack Wiki - InfluxDB 2](https://sensorsiot.github.io/IOTstack/Containers/InfluxDB2/)
+* [InfluxDB 2 experiments](https://gist.github.com/Paraphraser/aef2dbcc37f8f895ec7ead1068fd8bf1) (gist).
 
 <a name="installDependencies"></a>
 ### Install dependencies
@@ -447,7 +452,7 @@ You should test connectivity like this:
 	$ rm test.txt
 	```
 
-Your goal is that both of the *scp* commands should work without prompting for passwords or the need to accept fingerprints. Follow [this tutorial](ssh_tutorial.md) if you don't know how to do that.
+Your goal is that both of the *scp* commands should work without prompting for passwords or the need to accept fingerprints. Follow [this tutorial](ssh-tutorial.md) if you don't know how to do that.
 
 Once you are sure your working PREFIX is correct, use your favourite text editor to copy the values to the [configuration file](#configFile).
 
@@ -1399,6 +1404,11 @@ That can't happen when [`iotstack_backup`](#iotstackBackup) is started by cron b
 
 You may also find a "You have new mail" message on your next login.
 
+<a name="spaceUtilisation"></a>
+### monitoring disk space utilisation
+
+If you are short on storage space, either on your Pi or on your remote (eg Dropbox), you might find the tutorial on [Monitoring Storage Quotas](monitoring-storage-quotas.md) useful.
+
 <a name="periodicMaintenance"></a>
 ### periodic maintenance
 
@@ -1410,3 +1420,11 @@ $ git checkout master
 $ git pull
 $ ./install_scripts.sh
 ```
+
+<a name="tutorials"></a>
+## Tutorials & Guides
+
+* [Setting up SSH keys for password-less access](ssh-tutorial.md)
+* [Taking a snapshot of your Raspberry Pi system](raspbian-system-snapshots.md)
+* [Monitoring Storage Quotas](monitoring-storage-quotas.md)
+* [Generating GnuPG Keys](generating-gpg-keys.md)

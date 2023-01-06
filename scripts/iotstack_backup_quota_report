@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+
+# the name of the running script (ie the script can be renamed)
+SCRIPT=$(basename "$0")
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "$SCRIPT should NOT be run using sudo" && exit -1
+
+# check dependencies
+if [ -z "$(which mosquitto_pub)" -o -z "$(which rclone)" ] ; then
+	echo "Missing dependencies. Please re-run install_scripts.sh."
+	exit -1
+fi
+
+# acquire parameters. Defaults assume:
+# 1. the rclone remote to be queried is "dropbox".
+# 2. a prefix string of "/quota" is appropriate.
+# 3. both the script and an MQTT broker are running on the same host.
+# 4. the MQTT broker is listening on port 1883
+RCLONEREMOTE=${1:-"dropbox"}
+TOPICPREFIX=${2:-"/quota"}
+MQTTBROKER=${3:-"127.0.0.1"}
+MQTTPORT=${4:-"1883"}
+
+# running interactively ?
+if [ ! -t 0 ] ; then
+
+   # no! redirect output and errors to a log file
+   mkdir -p "$HOME/Logs"
+   exec >> "$HOME/Logs/$SCRIPT.log" 2>&1
+
+fi
+
+# function to invoke rclone to fetch disk quota information
+#   $1 = required remote name for rclone (eg "dropbox:" or "/")
+#   $2 = required topic suffix (eg "dropbox" or "local")
+fetch() {
+
+   # invoke rclone to fetch quota info in json format and reduce to a single line of output
+   local QUOTA=$(rclone about "$1" --json | tr '\n\t' ' ')
+
+   # did the operation succeed and return a non-empty string?
+   if [ $? -eq 0 -a -n "$QUOTA" ] ; then
+
+
+      # yes! publish via MQTT
+      mosquitto_pub -h "$MQTTBROKER" -p "$MQTTPORT" -t "$TOPICPREFIX/$2" -m "$QUOTA"
+
+   else
+
+      # no! record failure in the log
+      echo "rclone is unable to fetch $2 quota information"
+
+   fi
+
+}
+
+# the syntax for rclone remotes is:
+#    $1 = the name of the remote followed by a colon
+#    $2 = the name of the remote without the trailing colon
+fetch "$RCLONEREMOTE:" "$RCLONEREMOTE"
+
+# the syntax for the local file system is:
+#    $1 = "/" (no trailing colon)
+#    $2 = the short hostname of the local system. Note:
+#         a. The host name is assumed to follow DNS rules and contain
+#            ONLY letters, digits and hyphens (the result is undefined
+#            if a non-DNS-compliant host name is being used).
+#         b. "hostname -s" is used rather than $HOSTNAME because this
+#            improves portability (eg on macOS).
+fetch "/" "$(hostname -s)"

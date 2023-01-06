@@ -1,0 +1,250 @@
+#!/usr/bin/env bash
+
+# support user renaming of script
+SCRIPT=$(basename "$0")
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "$SCRIPT should NOT be run using sudo" && exit -1
+
+# check dependencies
+if [ -z "$(which shyaml)" -o -z "$(which curl)" -o -z "$(which jq)" ] ; then
+	echo "Missing dependencies. Please re-run install_scripts.sh."
+	exit -1
+fi
+
+# the marker defaults to the script name but can be overridden
+MARKER=${1:-"$SCRIPT"}
+
+# hidden-file markers to include or exclude the directory in which the
+# marker is found. If a directory contains both, "include" prevails.
+# Markers ONLY apply within the scope of DIRECTORY structures defined
+# by WORKING_INCLUDE (set up below). You can't put an include marker
+# any old place (eg /var/log) and have this script go find it. You
+# handle that problem by adding /var/log to CONFIG_INCLUDE (below)
+EXCLUDE_MARKER=".exclude.${MARKER}"
+INCLUDE_MARKER=".include.${MARKER}"
+
+# the configuration information is found here
+CONFIG_DIR="$HOME/.config/iotstack_backup"
+CONFIG_YML="$CONFIG_DIR/config.yml"
+CONFIG_INCLUDE="$CONFIG_DIR/$MARKER-inclusions.txt"
+
+# does the configuration file exist?
+if [ -e "$CONFIG_YML" ] ; then
+	CLOUD_METHOD=$(shyaml get-value backup.method  < "$CONFIG_YML")
+	CLOUD_PREFIX=$(shyaml get-value backup.prefix  < "$CONFIG_YML")
+else
+	echo "Error: Configuration file not found: $CONFIG_YML"
+	echo "       This needs to be initialised first."
+	exit -1
+fi
+
+# does the configuration-include exist as a non-empty file?
+if [ ! -s "$CONFIG_INCLUDE" ] ; then
+
+	# no! initialise it! These are all folders but files can be added
+	# to the list by the user.
+	cat <<-INCLUSIONS >"$CONFIG_INCLUDE"
+	/etc
+	/etc-baseline
+	/var/spool/cron/crontabs
+	/home
+	INCLUSIONS
+
+	echo "$CONFIG_INCLUDE initialised from defaults:"
+	sed -e "s/^/  /" "$CONFIG_INCLUDE"
+
+	exit 0
+
+fi
+
+# we can begin
+echo "----- Starting $SCRIPT at $(date) -----"
+
+# the working inclusions will be here (content of the configured
+# inclusions, filtered to remove items that don't exist)
+WORKING_INCLUDE="$(mktemp -p /dev/shm/)" ; touch "$WORKING_INCLUDE"
+
+# form the full cloud reference
+CLOUD_REF="$CLOUD_PREFIX/$MARKER"
+
+# extract the target portion (everything to the left of the first colon)
+CLOUD_TARGET="${CLOUD_REF%%:*}"
+
+# extract the path portion (everything to the right of the first colon)
+CLOUD_PATH=${CLOUD_REF#*:}
+
+# the backup is stored in this directory
+BACKUP_DIR=$(mktemp -d --tmpdir "$SCRIPT-XXXXXX")
+
+# the backup file is stored in that directory
+BACKUP_TAR_GZ="$BACKUP_DIR/$(date +"%Y-%m-%d_%H%M").$HOSTNAME.raspbian-snapshot.tar.gz"
+
+# create a temporary file to hold a list of excluded paths
+BACKUP_EXCLUDE="$(mktemp -p /dev/shm/ backup_exclusions_XXXXXX.txt)"
+
+# plus a temporary file to annotations
+ANNOTATIONS="$(mktemp -p /dev/shm/ backup_annotations_XXXXXX.txt)"
+
+# report facts
+echo "Environment:"
+echo "    Script marker = $MARKER"
+echo "     Search paths = $CONFIG_INCLUDE"
+echo "   Exclude marker = $EXCLUDE_MARKER"
+echo "   Include marker = $INCLUDE_MARKER"
+echo "     Cloud method = $CLOUD_METHOD"
+echo "  Cloud reference = $CLOUD_REF"
+
+# iterate the list of included DIRECTORIES
+echo "Scanning:"
+for INCLUDE in $(cat "$CONFIG_INCLUDE") ; do
+
+	# does the item exist?
+	if [ -e "$INCLUDE" ] ; then
+
+		# yes! add it to the working include list
+		echo "$INCLUDE" >>"$WORKING_INCLUDE"
+
+	fi
+
+	# is the included item a directory?
+	if [ -d "$INCLUDE" ] ; then
+
+		# emit the name to give an indication of progress
+		echo "  $INCLUDE"
+
+		# yes! search for sub-directories already managed by git or
+		# subversion, or which contain the marker file to explicitly
+		# exclude the directory and its contents. If a match is found,
+		# add the PARENT directory to the exclusion list
+		for EXCLUDE in ".git" ".svn" "$EXCLUDE_MARKER" ; do
+			for EXCLUDED in $(sudo find "$INCLUDE" -name "$EXCLUDE") ; do
+				PARENTDIR=$(dirname "$EXCLUDED")
+				if [ ! -e "$PARENTDIR/$INCLUDE_MARKER" ] ; then
+					echo "$PARENTDIR" >>"$BACKUP_EXCLUDE"
+					echo -e "\n----- [$SCRIPT] ----- excluding $PARENTDIR" >>"$ANNOTATIONS"
+					case "$EXCLUDE" in
+						".git" )
+							if [ -n "$(which git)" ] ; then
+								git -C "$PARENTDIR" remote -v >>"$ANNOTATIONS" 2>&1
+								git -C "$PARENTDIR" status >>"$ANNOTATIONS" 2>&1
+							fi
+						;;
+						".svn" )
+							if [ -n "$(which svn)" ] ; then
+								svn info --show-item url "$PARENTDIR" >>"$ANNOTATIONS" 2>&1
+								svn status "$PARENTDIR" >>"$ANNOTATIONS" 2>&1
+							fi
+						;;
+						*)
+						;;
+					esac
+				fi
+			done
+		done
+
+		# now search each looking for directories explicitly identified
+		# as caches and exclude those too. Done here as a "for" in case
+		# more cache-like candidates are identified in future.
+		for EXCLUDE in ".cache" ; do
+			for EXCLUDED in $(sudo find "$INCLUDE" -type d -name "$EXCLUDE") ; do
+				if [ ! -e "$EXCLUDED/$INCLUDE_MARKER" ] ; then
+					echo "$EXCLUDED" >>"$BACKUP_EXCLUDE"
+					echo -e "\n----- [$SCRIPT] ----- excluding $EXCLUDED" >>"$ANNOTATIONS"
+				fi
+			done
+		done
+
+	fi
+
+done
+
+# append FILES for inclusion - /boot done here so that only files
+# guaranteed to exist get added to the list and don't trigger spurious
+# warnings from tar
+ls -1 /boot/config.txt* /boot/cmdline.txt* >>"$WORKING_INCLUDE"
+echo "$ANNOTATIONS" >>"$WORKING_INCLUDE"
+
+# create the file (sets ownership correctly)
+touch "$BACKUP_TAR_GZ"
+
+# add information to the report
+echo "Paths included in the backup:"
+sed -e "s/^/  /" "$WORKING_INCLUDE"
+echo "Paths excluded from the backup:"
+sed -e "s/^/  /" "$BACKUP_EXCLUDE"
+
+# perform the backup
+sudo tar \
+	-czPf "$BACKUP_TAR_GZ" \
+	-X "$BACKUP_EXCLUDE" \
+	-T "$WORKING_INCLUDE" \
+	--warning=none
+
+# clean up the working files
+rm "$WORKING_INCLUDE"
+rm "$BACKUP_EXCLUDE"
+
+# assume the file to be backed-up is the .tar.gz just created
+BACKUP_RESULT="$BACKUP_TAR_GZ"
+
+# is gpg installed and is there a candidate key to use?
+if [ -n "$(which gpg)" -a -n "$GPGKEYID" ] ; then
+
+	# yes! search the keychain for that key
+	gpg --list-keys "$GPGKEYID" >/dev/null 2>&1
+
+	# was the key found in the keychain?
+	if [ $? -eq 0 ] ; then
+
+		# yes! redefine the backup result to be an encrypted file
+		BACKUP_RESULT="${BACKUP_RESULT}.gpg"
+
+		# perform the encryption
+		echo "Encrypting the backup using --recipient $GPGKEYID"
+		gpg --recipient "$GPGKEYID" --output "$BACKUP_RESULT" --encrypt "$BACKUP_TAR_GZ"
+
+	else
+
+		# no! moan
+		echo "Warning: key $GPGKEYID not found in keychain - unable to encrypt backup"
+
+	fi
+
+fi
+
+# copy the backup file off this machine
+case "$CLOUD_METHOD" in
+
+	"RCLONE" )
+		echo "Using rclone to copy the result off this machine"
+		rclone copy -v \
+			"$BACKUP_RESULT" \
+			"$CLOUD_TARGET:$CLOUD_PATH"
+	;;
+
+	"RSYNC" )
+		echo "Using rsync to copy the result off this machine"
+		ssh "$CLOUD_TARGET" "mkdir -p \"$CLOUD_PATH\""
+		rsync -vrt \
+			"$BACKUP_RESULT" \
+			"$CLOUD_TARGET:\"$CLOUD_PATH/\""
+	;;
+
+	"SCP" )
+		echo "Using scp to copy the result off this machine"
+		ssh "$CLOUD_TARGET" "mkdir -p \"$CLOUD_PATH\""
+		scp "$BACKUP_RESULT" "$CLOUD_TARGET:\"$CLOUD_PATH/\""
+	;;
+
+	*)
+		echo "Warning: $CLOUD_METHOD backup method is not supported"
+		echo "Warning: The only backup files are the ones in $BACKUPSDIR"
+	;;
+
+esac
+
+# remove the temporary backup structures
+rm -rf "$BACKUP_DIR"
+
+echo "----- Finished $SCRIPT at $(date) -----"
