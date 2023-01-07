@@ -107,7 +107,7 @@ Example code matching that flow can be found [here](./resources/quota-flow-examp
 The *MQTT-In* node subscribes to the wildcard topic:
 
 ```
-/home/quota/#
+/home/quota/+
 ```
 
 Continuing with the previous example, the flow would receive two messages:

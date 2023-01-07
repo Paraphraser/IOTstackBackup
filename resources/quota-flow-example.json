@@ -12,7 +12,7 @@
         "type": "mqtt in",
         "z": "139f6648a7cddeaf",
         "name": "/home/quota/[system]",
-        "topic": "/home/quota/#",
+        "topic": "/home/quota/+",
         "qos": "2",
         "datatype": "json",
         "broker": "c5d29fb5.89907",
