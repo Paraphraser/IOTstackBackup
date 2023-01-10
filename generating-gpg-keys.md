@@ -76,7 +76,18 @@ By its very nature, a RAM disk is ephemeral. It will disappear as soon as you re
 <a name="keyPairKeyGen"></a>
 ### Step 2 – Key generation
 
-Use the following as a template:
+Although it isn't mandatory, you should always protect any private key with a passphrase. You can use any scheme you like but one good approach is to let GnuPG generate some random gibberish for you:
+
+```
+$ PASSPHRASE=$(gpg --gen-random --armor 0 24)
+$ echo $PASSPHRASE
+```
+
+You will need to provide your passphrase each time you need to either manipulate your private key or decrypt a file that is encrypted with the corresponding public key. If you forget your passphrase, your private key will be lost, your public key useless, and you will not be able to decrypt your files.
+
+> If you follow the [Dr Duh](https://github.com/drduh/YubiKey-Guide) and your private keys are stored on a YubiKey, you will need to enter the key's PIN and then touch the key to approve each decryption operation. 
+
+Once you have decided on your passphrase, use the following as a template:
 
 ```
 gpg --batch --quick-generate-key "«given» «last» («comment») <«email»>" rsa4096 encrypt never
@@ -94,11 +105,7 @@ None of the fields needs to be truthful. The email address does not have to exis
 $ gpg --batch --quick-generate-key "Roger Rabbit (Raspberry Pi Backups) <chewie@carrots.com>" rsa4096 encrypt never
 ```
 
-You will be prompted for a passphrase to protect your private key. How you respond depends on your security needs. If you set a passphrase, you will need to provide it each time you need to decrypt a file that is encrypted with the corresponding public key. If you forget your passphrase, you will not be able to decrypt your files.
-
-> If you follow the [Dr Duh](https://github.com/drduh/YubiKey-Guide) and your private keys are stored on a YubiKey, you will need to enter the key's PIN and then touch the key to approve each decryption operation. 
-
-If you decide you do **not** want to use a passphrase, respond to the "Passphrase" prompt by pressing <kbd>tab</kbd> to select `<OK>`, then press <kbd>return</kbd>, and then confirm your decision by pressing <kbd>return</kbd> again. Without the protection of a passphrase, anyone with access to your private key will be able to decrypt any file encrypted with the corresponding public key.
+You will be prompted for your passphrase. If you decide you do **not** want to use a passphrase, respond to the prompt by pressing <kbd>tab</kbd> to select `<OK>`, then press <kbd>return</kbd>, and then confirm your decision by pressing <kbd>return</kbd> again. Without the protection of a passphrase, anyone with access to your private key will be able to decrypt any file encrypted with the corresponding public key.
 
 There will be a small delay and you will see a result like the following:
 
