@@ -29,8 +29,14 @@ InfluxDB 1.8             | yes
 InfluxDB 2               | yes
 MariaDB                  | yes
 Nextcloud + Nextcloud_DB | yes
-Postgres                 | no
+Postgres                 | yes <sup>†</sup>
 Subversion               | no
+
+† 2023-Feb-08 Depends on:
+
+1. [PR661](https://github.com/SensorsIot/IOTstack/pull/661) and [PR662](https://github.com/SensorsIot/IOTstack/pull/662) being merged into IOTstack (which was done on 2023-03-02); **and**
+2. You updating your local copy of IOTstack (eg `git pull`); **and**
+2. Adoption of the updated service definition for Postgres in your compose file.
 
 ## Contents
 
@@ -808,6 +814,7 @@ The script invokes:
 * [`iotstack_backup_influxdb2`](#iotstackBackupContainer)
 * [`iotstack_backup_nextcloud`](#iotstackBackupContainer)
 * [`iotstack_backup_mariadb`](#iotstackBackupContainer)
+* [`iotstack_backup_postgres`](#iotstackBackupContainer)
 
 The results of those are placed in `~/IOTstack/backups` along with a log file containing everything written to `stdout` and `stderr` as the script executed.
 
@@ -996,6 +1003,7 @@ The script:
 * Invokes [`iotstack_restore_influxdb2`](#iotstackRestoreContainer)
 * Invokes [`iotstack_restore_nextcloud`](#iotstackRestoreContainer)
 * Invokes [`iotstack_restore_mariadb`](#iotstackRestoreContainer)
+* Invokes [`iotstack_restore_postgres`](#iotstackRestoreContainer)
 * Cleans-up the temporary directory
 * Reactivates your stack if it was deactivated by this script.
 

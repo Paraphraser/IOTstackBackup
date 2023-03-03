@@ -169,6 +169,9 @@ iotstack_restore_nextcloud "$RESTOREDIR" "$RUNTAG"
 # try to restore mariadb backup (assumes mariadb-backup.tar.gz)
 iotstack_restore_mariadb "$RESTOREDIR" "$RUNTAG"
 
+# try to restore postgres backup (assumes postgres-backup.sql.gz.tar)
+iotstack_restore_postgres "$RESTOREDIR" "$RUNTAG"
+
 # clean up the temporary restore directory
 echo "Cleaning up"
 rm -rf "$RESTOREDIR"

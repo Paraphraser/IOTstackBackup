@@ -149,6 +149,9 @@ iotstack_backup_nextcloud "$BACKUPSDIR" "$RUNTAG"
 # perform the mariadb backup
 iotstack_backup_mariadb "$BACKUPSDIR" "$RUNTAG"
 
+# perform the postgres backup
+iotstack_backup_postgres "$BACKUPSDIR" "$RUNTAG"
+
 # copy the files (keep in mind that log entries written after the
 # log is copied to the remote will only be in the local log).
 case "$CLOUD_METHOD" in
@@ -182,7 +185,7 @@ case "$CLOUD_METHOD" in
 esac
 
 # cleanup: containers - "influx" not "influxdb" - then logs as a special case
-for C in "general" "influx" "influxdb2" "nextcloud" "mariadb" ; do
+for C in "general" "influx" "influxdb2" "nextcloud" "mariadb" "postgres" ; do
    ls -t1 *."$C-backup".* 2>/dev/null | tail -n +$LOCAL_RETAIN | xargs rm -f
 done
 ls -t1 *."$LOGNAME".* 2>/dev/null | tail -n +$LOCAL_RETAIN | xargs rm -f

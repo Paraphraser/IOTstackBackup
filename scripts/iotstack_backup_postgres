@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+
+# support user renaming of script
+SCRIPT=$(basename "$0")
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "$SCRIPT should NOT be run using sudo" && exit -1
+
+# assumptions that can be overridden
+IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
+CONTAINER=${CONTAINER:-"postgres"}
+DEFAULTFILENAME=${DEFAULTFILENAME:-"$CONTAINER-backup.sql.gz.tar"}
+
+# the project name is the all-lower-case form of the folder name
+PROJECT=$(basename ${IOTSTACK,,})
+
+# useful function
+isContainerRunning() {
+   if STATUS=$(curl -s --unix-socket /var/run/docker.sock http://localhost/containers/$1/json | jq .State.Status) ; then
+      if [ "$STATUS" = "\"running\"" ] ; then
+         return 0
+      fi
+   fi
+   return 1
+}
+
+# $1 is required and is either path to a .tar.gz or the path to a folder
+# $2 is optional and is the runtag (yyyy-mm-dd_hhmm.host-name)
+# $3 is optional and overrides the default file name
+
+case "$#" in
+
+  1)
+    BACKUP_SQL_GZ_TAR=$(realpath "$1")
+    ;;
+
+  2 | 3)
+    BACKUP_SQL_GZ_TAR=$(realpath "$1/$2.${3:-"$DEFAULTFILENAME"}")
+    ;;
+
+  *)
+    echo "Usage 1: $SCRIPT path/to/$DEFAULTFILENAME"
+    echo "Usage 2: $SCRIPT path/to/backupdir runtag {override}"
+    echo "         (override defaults to $DEFAULTFILENAME)"
+    exit -1
+    ;;
+
+esac
+
+# fail safe if the file already exists - no accidental overwrites
+if [ -e "$BACKUP_SQL_GZ_TAR" ] ; then
+   echo "Error: $BACKUP_SQL_GZ_TAR already exists - will not be overwritten"
+   exit -1
+fi
+
+# assumptions
+COMPOSENAME="docker-compose.yml"
+COMPOSE="$IOTSTACK/$COMPOSENAME"
+VOLUMES="$IOTSTACK/volumes"
+POSTGRES_VOLUMES="$VOLUMES/$CONTAINER"
+POSTGRES_BACKUP="$POSTGRES_VOLUMES/db_backup"
+
+# check that container is running
+if ! isContainerRunning "$CONTAINER" ; then
+   echo "Warning: $CONTAINER not running - backup skipped"
+   exit 0
+fi
+
+# check that the backup directory exists
+if [ ! -d "$POSTGRES_BACKUP" ] ; then
+
+   echo "Error: the $POSTGRES_BACKUP directory does not exist."
+   echo ""
+   echo "This is probably because your service definition for PostgreSQL does not"
+   echo "include the following volume mapping:"
+   echo ""
+   echo "   - ./volumes/postgres/db_backup:/backup"
+   echo ""
+   echo "Please compare your service definition with the IOTstack template at:"
+   echo ""
+   echo "  $IOTSTACK/.templates/postgres/service.yml"
+   echo ""
+   echo "and ensure that your active service definition in $COMPOSENAME"
+   echo "accurately reflects the version in the template."
+   echo ""
+
+   exit -1
+
+fi
+
+# now we can begin
+echo "----- Starting $SCRIPT at $(date) -----"
+
+# create the file (sets ownership)
+touch "$BACKUP_SQL_GZ_TAR"
+
+# the database backup directory needs to be empty
+if [ $(ls -1 "$POSTGRES_BACKUP" | wc -l) -gt 0 ] ; then
+   echo "Erasing $POSTGRES_BACKUP"
+   sudo rm "$POSTGRES_BACKUP"/*
+fi
+
+
+# tell postgres to take a backup
+echo "Telling $CONTAINER to create a backup"
+docker exec "$CONTAINER" bash -c 'pg_dumpall -U $POSTGRES_USER | gzip > /backup/postgres_backup.sql.gz'
+
+# perform the backup (relative to ~/IOTstack/volumes/mariadb)
+echo "Collecting the backup file (a .gz) into a .tar"
+sudo tar \
+  -czf "$BACKUP_SQL_GZ_TAR" \
+  -C "$POSTGRES_BACKUP" \
+  .
+
+# report size of archive
+du -h "$BACKUP_SQL_GZ_TAR"
+
+echo "----- Finished $SCRIPT at $(date) -----"
