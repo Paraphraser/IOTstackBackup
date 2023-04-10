@@ -4,7 +4,7 @@
 SCRIPT=$(basename "$0")
 
 # should not run as root
-[ "$EUID" -eq 0 ] && echo "$SCRIPT should NOT be run using sudo" && exit -1
+[ "$EUID" -eq 0 ] && echo "$SCRIPT should NOT be run using sudo" && exit 1
 
 # assumptions that can be overridden
 IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
@@ -42,7 +42,7 @@ case "$#" in
     echo "Usage 1: $SCRIPT path/to/$DEFAULTFILENAME"
     echo "Usage 2: $SCRIPT path/to/backupdir runtag {override}"
     echo "         (override defaults to $DEFAULTFILENAME)"
-    exit -1
+    exit 1
     ;;
 
 esac
@@ -50,7 +50,7 @@ esac
 # fail safe if the file already exists - no accidental overwrites
 if [ -e "$BACKUP_SQL_GZ_TAR" ] ; then
    echo "Error: $BACKUP_SQL_GZ_TAR already exists - will not be overwritten"
-   exit -1
+   exit 1
 fi
 
 # assumptions
@@ -84,7 +84,7 @@ if [ ! -d "$POSTGRES_BACKUP" ] ; then
    echo "accurately reflects the version in the template."
    echo ""
 
-   exit -1
+   exit 1
 
 fi
 

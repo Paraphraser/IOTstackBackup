@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 # should not run as root
-[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit -1
+[ "$EUID" -eq 0 ] && echo "This script should NOT be run using sudo" && exit 1
 
 # exactly one argument
 if [ "$#" -ne 1 ]; then
    echo "Usage: $(basename "$0") template"
-   exit -1
+   exit 1
 fi
 
 TEMPLATES_DIR=$(realpath $(dirname "$0"))
