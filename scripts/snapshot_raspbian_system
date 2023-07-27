@@ -228,13 +228,13 @@ case "$CLOUD_METHOD" in
 		ssh "$CLOUD_TARGET" "mkdir -p \"$CLOUD_PATH\""
 		rsync -vrt \
 			"$BACKUP_RESULT" \
-			"$CLOUD_TARGET:\"$CLOUD_PATH/\""
+			"$CLOUD_TARGET:$CLOUD_PATH/"
 	;;
 
 	"SCP" )
 		echo "Using scp to copy the result off this machine"
 		ssh "$CLOUD_TARGET" "mkdir -p \"$CLOUD_PATH\""
-		scp "$BACKUP_RESULT" "$CLOUD_TARGET:\"$CLOUD_PATH/\""
+		scp "$BACKUP_RESULT" "$CLOUD_TARGET:$CLOUD_PATH/"
 	;;
 
 	*)
