@@ -85,7 +85,7 @@ if [ -z "$(which rclone)" ] ; then
    echo "If you intend to use RCLONE with IOTstackBackup, please note that it is not"
    echo "installed on your system. Please run the following command:"
    echo ""
-   echo "   https://rclone.org/install.sh | sudo bash"
+   echo "   curl https://rclone.org/install.sh | sudo bash"
    echo ""
    echo "=========================================================================="
 
