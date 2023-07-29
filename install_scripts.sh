@@ -69,7 +69,7 @@ if [ -z "$(which shyaml)" ] ; then
    echo "IOTstackBackup depends on \"shyaml\" which does not seem to be installed on your"
    echo "system. Please run the following command:"
    echo ""
-   echo "   sudo pip3 install -U shyaml"
+   echo "   pip3 install -U shyaml"
    echo ""
    echo "You can omit the \"sudo\" if you only want \"shyaml\" to be installed for the"
    echo "local user instead of being made available system-wide."
