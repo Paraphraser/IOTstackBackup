@@ -77,6 +77,7 @@ CONFIG_YML="$HOME/.config/iotstack_backup/config.yml"
 if [ -e "$CONFIG_YML" ] ; then
    CLOUD_METHOD=$(shyaml get-value backup.method  < "$CONFIG_YML")
    CLOUD_PREFIX=$(shyaml get-value backup.prefix  < "$CONFIG_YML")
+   CLOUD_OPTIONS=$(shyaml -q get-value backup.options  < "$CONFIG_YML")
    LOCAL_RETAIN=$(shyaml get-value backup.retain  < "$CONFIG_YML")
 else
    echo "Warning: Configuration file not found: $CONFIG_YML"
@@ -127,9 +128,10 @@ exec >> "$LOGFILE"
 exec 2>> "$LOGFILE"
 
 echo "----- Starting $SCRIPT at $(date) -----"
-echo "CLOUD_METHOD = $CLOUD_METHOD"
-echo "CLOUD_PREFIX = $CLOUD_PREFIX"
-echo "  CLOUD_PATH = $CLOUD_PATH"
+echo " CLOUD_METHOD = $CLOUD_METHOD"
+echo "CLOUD_OPTIONS = $CLOUD_OPTIONS"
+echo " CLOUD_PREFIX = $CLOUD_PREFIX"
+echo "   CLOUD_PATH = $CLOUD_PATH"
 
 # record images in use (ukkopahis suggestion on Discord)
 docker image ls --all --digests --no-trunc
@@ -157,7 +159,7 @@ iotstack_backup_postgres "$BACKUPSDIR" "$RUNTAG"
 case "$CLOUD_METHOD" in
 
   "RCLONE" )
-    rclone sync -v \
+    rclone sync -v "$CLOUD_OPTIONS" \
        "$BACKUPSDIR" \
        "$CLOUD_PATH" \
        --exclude "$LOGFILE" \
@@ -166,7 +168,7 @@ case "$CLOUD_METHOD" in
 
   "RSYNC" )
     # note that the slash after "$BACKUPSDIR" is required!
-    rsync -vrt --delete \
+    rsync -vrt "$CLOUD_OPTIONS" --delete \
       --exclude="$LOGFILE" \
       --exclude=influxdb \
       "$BACKUPSDIR"/ \
@@ -174,7 +176,7 @@ case "$CLOUD_METHOD" in
     ;;
 
   "SCP" )
-    scp "$RUNTAG".* "$CLOUD_PATH"
+    scp "$CLOUD_OPTIONS" "$RUNTAG".* "$CLOUD_PATH"
     ;;
 
   *)

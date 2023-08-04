@@ -1,8 +1,10 @@
 backup:
   method: "SCP"
+  # options: "-O"
   prefix: "user@host.domain.com:path/to/backups"
   retain: 8
 
 restore:
   method: "SCP"
+  # options: "-O"
   prefix: "user@host.domain.com:path/to/backups"

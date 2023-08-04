@@ -49,6 +49,7 @@ Subversion               | no
 	- [The configuration file](#configFile)
 
 		- [method:](#keyMethod)
+		- [options:](#keyOptions)
 		- [prefix:](#keyPrefix)
 		- [retain:](#keyRetain)
 
@@ -336,10 +337,40 @@ What "method" means depends on your perspective. For **backup** operations you h
 For **restore** operations, your choices are:
 
 * SCP (file-level copying)
-* RSYNC (file-level copying; actually uses *scp*)
+* <a name="rsyncUsesScp"></a>RSYNC (file-level copying; actually uses *scp*)
 * RCLONE (file-level copying)
 
 Although the templates assume you will use the same method for both backup and restore, this is not a requirement. You are free to [mix and match](#mixnmatch).
+
+<a name="keyOptions"></a>
+#### options:
+
+Caution:
+
+* This is an **experimental** field. Use it at your own risk.
+
+The "options" field is designed to address a specific problem with the SCP method.
+
+The `scp` command is in transition from supporting the *secure copy protocol* (SCP) to supporting the *secure file transfer protocol* (SFTP). In theory, the client and server will negotiate whether they both support SFTP and will fall back to SCP as the lowest common denominator. However, there can be situations where the client and server both believe SFTP is available yet, for some reason, the client sends a command which the server is unable to implement, or vice versa.
+
+This problem can be overcome by passing the `-O` flag to the `scp` command. This flag forces the use of SCP, irrespective of whether SFTP is available.
+
+The configuration file templates provided with IOTstackBackup include the following clause where its use *may* be relevant:
+
+```
+  # options: "-O"
+```
+
+The situations where it *may* be relevant are:
+
+1. Where SCP is either the backup or restore method; and
+2. Where RSYNC is the restore method. This is because RSYNC restore is [implemented by calling SCP](#rsyncUsesScp).
+
+The reason why the clause is commented-out by default is because the `-O` flag is only available on `scp` commands (clients) which support both SCP and SFTP. In other words, if `-O` is passed to an `scp` command which does not support the option, the command aborts. 
+
+To enable the `-O` flag, remove the leading `# ` from the configuration file. Active `options:` clauses will show up when you [check your configuration file](#configCheck).
+
+Although the `options:` clause was implemented to address the specific problem with SCP, it is actually supported for **all** methods. Any value you provide will be passed to your chosen backup and/or restore method. No checking is done and you are entirely responsible for ensuring that you only pass options to your chosen method which are both valid and make sense in context. That is why its use is "at your own risk".
 
 <a name="keyPrefix"></a>
 #### prefix:

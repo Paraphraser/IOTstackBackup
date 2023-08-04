@@ -76,6 +76,7 @@ CONFIG_YML="$HOME/.config/iotstack_backup/config.yml"
 # does the configuration file exist?
 if [ -e "$CONFIG_YML" ] ; then
    CLOUD_METHOD=$(shyaml get-value restore.method  < "$CONFIG_YML")
+   CLOUD_OPTIONS=$(shyaml -q get-value restore.options  < "$CONFIG_YML")
    CLOUD_PREFIX=$(shyaml get-value restore.prefix  < "$CONFIG_YML")
 else
    echo "Warning: Configuration file not found: $CONFIG_YML"
@@ -106,9 +107,10 @@ if [ ! -d "$IOTSTACK" ] ; then
 fi
 
 echo "----- Starting $SCRIPT at $(date) -----"
-echo "CLOUD_METHOD = $CLOUD_METHOD"
-echo "CLOUD_PREFIX = $CLOUD_PREFIX"
-echo "  CLOUD_PATH = $CLOUD_PATH"
+echo " CLOUD_METHOD = $CLOUD_METHOD"
+echo "CLOUD_OPTIONS = $CLOUD_OPTIONS"
+echo " CLOUD_PREFIX = $CLOUD_PREFIX"
+echo "   CLOUD_PATH = $CLOUD_PATH"
 
 # make a temporary directory within the scope of IOTstack
 RESTOREDIR=$(mktemp -d -p "$IOTSTACK")
@@ -119,11 +121,11 @@ echo "Attempting to fetch backup images for $RUNTAG"
 case "$CLOUD_METHOD" in
 
   "RCLONE" )
-    rclone copy -v --include "$RUNTAG.*" "$CLOUD_PATH" "$RESTOREDIR"
+    rclone copy -v "$CLOUD_OPTIONS" --include "$RUNTAG.*" "$CLOUD_PATH" "$RESTOREDIR"
     ;;
 
   "RSYNC" | "SCP" )
-    scp "$CLOUD_PATH/$RUNTAG".* "$RESTOREDIR"
+    scp "$CLOUD_OPTIONS" "$CLOUD_PATH/$RUNTAG".* "$RESTOREDIR"
     ;;
 
   * )

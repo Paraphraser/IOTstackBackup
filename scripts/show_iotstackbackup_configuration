@@ -13,19 +13,23 @@ CONFIG_YML="$HOME/.config/iotstack_backup/config.yml"
 if [ -e "$CONFIG_YML" ] ; then
 
    # try to fetch from yml file
-    BACKUP_METHOD=$(shyaml get-value backup.method  < "$CONFIG_YML")
-    BACKUP_PREFIX=$(shyaml get-value backup.prefix  < "$CONFIG_YML")
-     LOCAL_RETAIN=$(shyaml get-value backup.retain  < "$CONFIG_YML")
-   RESTORE_METHOD=$(shyaml get-value restore.method < "$CONFIG_YML")
-   RESTORE_PREFIX=$(shyaml get-value restore.prefix < "$CONFIG_YML")
+    BACKUP_METHOD=$(shyaml get-value backup.method   < "$CONFIG_YML")
+   BACKUP_OPTIONS=$(shyaml -q get-value backup.options  < "$CONFIG_YML")
+    BACKUP_PREFIX=$(shyaml get-value backup.prefix   < "$CONFIG_YML")
+     LOCAL_RETAIN=$(shyaml get-value backup.retain   < "$CONFIG_YML")
+   RESTORE_METHOD=$(shyaml get-value restore.method  < "$CONFIG_YML")
+  RESTORE_OPTIONS=$(shyaml -q get-value restore.options < "$CONFIG_YML")
+   RESTORE_PREFIX=$(shyaml get-value restore.prefix  < "$CONFIG_YML")
 
    # emit results
    echo "Found the following configuration:"
    echo "  Configuration file = $CONFIG_YML"
    echo "       backup method = $BACKUP_METHOD"
+   [ -n "$BACKUP_OPTIONS" ] && echo "      backup options = $BACKUP_OPTIONS"
    echo "       remote prefix = $BACKUP_PREFIX"
    echo "        local retain = $LOCAL_RETAIN"
    echo "      restore method = $RESTORE_METHOD"
+   [ -n "$RESTORE_OPTIONS" ] && echo "     restore options = $RESTORE_OPTIONS"
    echo "       remote prefix = $RESTORE_PREFIX"
 
    # form example cloud paths

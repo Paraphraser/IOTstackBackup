@@ -5,4 +5,5 @@ backup:
 
 restore:
   method: "RSYNC"
+  # options: "-O"
   prefix: "user@host.domain.com:path/to/backups"
