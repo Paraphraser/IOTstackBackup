@@ -159,7 +159,7 @@ iotstack_backup_postgres "$BACKUPSDIR" "$RUNTAG"
 case "$CLOUD_METHOD" in
 
   "RCLONE" )
-    rclone sync -v "$CLOUD_OPTIONS" \
+    rclone sync -v $CLOUD_OPTIONS \
        "$BACKUPSDIR" \
        "$CLOUD_PATH" \
        --exclude "$LOGFILE" \
@@ -168,7 +168,7 @@ case "$CLOUD_METHOD" in
 
   "RSYNC" )
     # note that the slash after "$BACKUPSDIR" is required!
-    rsync -vrt "$CLOUD_OPTIONS" --delete \
+    rsync -vrt $CLOUD_OPTIONS --delete \
       --exclude="$LOGFILE" \
       --exclude=influxdb \
       "$BACKUPSDIR"/ \
@@ -176,7 +176,7 @@ case "$CLOUD_METHOD" in
     ;;
 
   "SCP" )
-    scp "$CLOUD_OPTIONS" "$RUNTAG".* "$CLOUD_PATH"
+    scp $CLOUD_OPTIONS "$RUNTAG".* "$CLOUD_PATH"
     ;;
 
   *)

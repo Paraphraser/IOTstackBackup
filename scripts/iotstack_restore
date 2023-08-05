@@ -121,11 +121,11 @@ echo "Attempting to fetch backup images for $RUNTAG"
 case "$CLOUD_METHOD" in
 
   "RCLONE" )
-    rclone copy -v "$CLOUD_OPTIONS" --include "$RUNTAG.*" "$CLOUD_PATH" "$RESTOREDIR"
+    rclone copy -v $CLOUD_OPTIONS --include "$RUNTAG.*" "$CLOUD_PATH" "$RESTOREDIR"
     ;;
 
   "RSYNC" | "SCP" )
-    scp "$CLOUD_OPTIONS" "$CLOUD_PATH/$RUNTAG".* "$RESTOREDIR"
+    scp $CLOUD_OPTIONS "$CLOUD_PATH/$RUNTAG".* "$RESTOREDIR"
     ;;
 
   * )
