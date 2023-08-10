@@ -67,12 +67,13 @@ if [ -z "$(which shyaml)" ] ; then
    echo ""
    echo "=========================================================================="
    echo "IOTstackBackup depends on \"shyaml\" which does not seem to be installed on your"
-   echo "system. Please run the following command:"
+   echo "system. On Bullseye or earlier systems, please run:"
    echo ""
    echo "   pip3 install -U shyaml"
    echo ""
-   echo "You can omit the \"sudo\" if you only want \"shyaml\" to be installed for the"
-   echo "local user instead of being made available system-wide."
+   echo "On Bookworm systems, run:"
+   echo ""
+   echo "   pip3 install -U --break-system-packages shyaml"
    echo "=========================================================================="
 
 fi
