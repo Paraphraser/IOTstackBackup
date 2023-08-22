@@ -71,6 +71,32 @@ if isContainerRunning "$CONTAINER" ; then
 	echo "reloading the influx databases"
 	docker exec "$CONTAINER" influxd restore -portable /var/lib/influxdb/backup
 
+	# define the target for the epilog which can be used to reconstruct
+	# elements like continuous queries which do not survive backup/restore
+	EPILOG_NAME="iotstack_restore_$CONTAINER.epilog"
+	EPILOG_PATH="$IOTSTACK/services/$CONTAINER/$EPILOG_NAME"
+
+	# does the hook script exist?
+	echo "Checking for optional epilog: $EPILOG_PATH"
+	if [ -f "$EPILOG_PATH" ] ; then
+
+		# yes! copy hook script into the container at the working directory
+		echo "   Epilog found - copying into container"
+		docker cp "$EPILOG_PATH" "$CONTAINER:$EPILOG_NAME"
+
+		# tell influx to process the hook script (also in the working dir)
+		echo "   Telling influxd to process epilog"
+		docker exec "$CONTAINER" influx -import -path "$EPILOG_NAME"
+
+		# the hook script vanishes the next time the container is
+		# recreated so there is no need to clean up.
+
+	else
+
+		echo "   No epilog found"
+
+	fi
+
 	echo "The $CONTAINER databases should be good to go"
 
 else

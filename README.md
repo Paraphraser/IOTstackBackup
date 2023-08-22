@@ -1467,3 +1467,4 @@ $ ./install_scripts.sh
 * [Taking a snapshot of your Raspberry Pi system](raspbian-system-snapshots.md)
 * [Monitoring Storage Quotas](monitoring-storage-quotas.md)
 * [Generating GnuPG Keys](generating-gpg-keys.md)
+* [Restoring users, grants and continuous queries in InfluxDB 1.8](influxdb-post-processing.md)
