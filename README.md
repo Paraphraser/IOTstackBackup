@@ -55,6 +55,7 @@ Subversion               | no
 
 	- [Choose your backup and restore methods](#chooseMethods)
 
+		- [*local*](#localOption)
 		- [*scp*](#scpOption)
 		- [*rsync*](#rsyncOption)
 		- [*rclone* (Dropbox)](#rcloneOption)
@@ -81,6 +82,9 @@ Subversion               | no
 	- [iotstack\_restore\_*«container»*](#iotstackRestoreContainer)
 
 - [Bare-metal restore](#bareMetalRestore)
+
+	- [Tips for using the *local* method](#usingLocal)
+
 - [Environment variables](#envVars)
 - [Reloading Influx databases "in situ"](#iotstackReloadInflux)
 - [Notes](#endNotes)
@@ -330,12 +334,14 @@ A script is provided to initialise a template configuration but you will need to
 
 What "method" means depends on your perspective. For **backup** operations you have a choice of:
 
+* LOCAL (default; backup files are only saved in `~/IOTstack/backups`)
 * SCP (file-level copying)
 * RSYNC (folder-level synchronisation)
 * RCLONE (folder-level synchronisation)
 
 For **restore** operations, your choices are:
 
+* LOCAL (default; only `~/IOTstack/backups` is searched)
 * SCP (file-level copying)
 * <a name="rsyncUsesScp"></a>RSYNC (file-level copying; actually uses *scp*)
 * RCLONE (file-level copying)
@@ -428,6 +434,37 @@ To repeat:
 
 <a name="chooseMethods"></a>
 ### Choose your backup and restore methods
+
+<a name="localOption"></a>
+#### *local*
+
+During backup operations, files are saved in `~/IOTstack/backups`. Files are not copied off the local machine.
+
+During restore operations, `~/IOTstack/backups` is searched. No attempt is made to fetch backup files over the network.
+
+*local* is assumed if you do not install a [configuration file](#configFile).
+
+You can, however, explicitly install a template [configuration file](#configFile) for *local* like this:
+
+```bash
+$ cd ~/.local/IOTstackBackup/configuration-templates
+$ ./install_template.sh LOCAL
+``` 
+
+The template is:
+
+```yaml
+backup:
+  method: "LOCAL"
+  prefix: "$USER/IOTstack/backups"
+  retain: 8
+
+restore:
+  method: "LOCAL"
+  prefix: "$USER/IOTstack/backups"
+```
+
+The `prefix` fields are not actually used during backup/restore operations involving *local*.
 
 <a name="scpOption"></a>
 #### *scp*
@@ -1234,6 +1271,41 @@ Scenario. Your SD card wears out, or your Raspberry Pi emits magic smoke, or you
 
 2. Run [`iotstack_restore`](#iotstackRestore) with the [«runtag»](#aboutRuntag) of a recent backup. Among other things, this will recover `docker-compose.yml` (ie there is no need to run the menu and re-select your services). As the various database containers are restored, a side-effect is to pull the container's image from DockerHub.
 3. Bring up the stack. That pulls any remaining images from DockerHub and, as the saying goes, you're "up, up and away".
+
+<a name="usingLocal"></a>
+### Tips for using the *local* method 
+
+The umbrella scripts each perform two basic functions:
+
+* [iotstack\_backup](#iotstackBackup):
+
+	1. runs the subordinate backup scripts in the correct order; and
+	2. saves the results across the network.
+
+* [iotstack\_restore](#iotstackRestore)
+
+	1. fetches the results of a previous backup across the network; and
+	2. runs the subordinate restore scripts in the correct order.
+
+If you do not define a network transport method (ie one of *scp*, *rsync* or *rclone*) then IOTstackBackup defaults to *local*.
+
+You can take advantage of the *local* behaviour during a [bare-metal restore](#bareMetalRestore) by managing the transport of the backup files yourself. For example, on the source host:
+
+1. Install IOTstackBackup and run its installer scripts (which will tell you if any dependencies also need to be added).
+2. Skip the configuration step (so the method defaults to *local*).
+3. Run `iotstack_backup`. That will save all the files in `~/IOTstack/backups`.
+
+Next, arrange your own transport of the backup files. How you do this is up to you. For example, you could use SCP, or SAMBA, or mount a thumb drive.
+
+When it comes to the restore, I'm going to assume you use [PiBuilder](https://github.com/Paraphraser/PiBuilder) to construct the platform. PiBuilder installs IOTstackBackup and satisfies all necessary dependencies.
+
+If you then move the backup files you saved earlier (using SCP, SAMBA or whatever) into the `~/IOTstack/backups` folder of the newly-built machine, you will be able to invoke:
+
+```
+$ iotstack_restore «runtag»
+```
+
+The restore routine will search `~/IOTstack/backups` and perform the required steps.
 
 <a name="envVars"></a>
 ## Environment variables
