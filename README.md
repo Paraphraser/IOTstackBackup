@@ -1511,7 +1511,7 @@ If you are in the situation where you want to migrate to a new system but you we
 
 1. The *new* system must have been constructed using [PiBuilder](https://github.com/Paraphraser/PiBuilder) and you should have just finished running the 05 script.
 
-2. The migration package must be present:
+2. The migration directory must be present:
 
 	> The instructions below assume `~/migration`. Make appropriate substitutions if you used a different name
 
