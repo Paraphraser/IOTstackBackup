@@ -92,6 +92,7 @@ cat <<-EXCLUSIONS >"$BACKUP_EXCLUDE"
 ./volumes/postgres
 ./volumes/pihole.restored
 ./volumes/subversion
+./volumes/zigbee2mqtt/data/log
 ./volumes/lost+found
 EXCLUSIONS
 
