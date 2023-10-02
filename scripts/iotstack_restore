@@ -9,9 +9,6 @@ SCRIPT=$(basename "$0")
 # assumptions that can be overridden
 IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
 
-# backups are generally stored here
-BACKUPSDIR="$IOTSTACK/backups"
-
 # the project name is the all-lower-case form of the folder name
 PROJECT=$(basename ${IOTSTACK,,})
 
@@ -86,8 +83,8 @@ else
 fi
 
 # apply defaults if not set from configuration file
-CLOUD_METHOD=${CLOUD_METHOD:-"LOCAL"}
-CLOUD_PREFIX=${CLOUD_PREFIX:-"$HOME/IOTstack/backups"}
+CLOUD_METHOD=${CLOUD_METHOD:-"SCP"}
+CLOUD_PREFIX=${CLOUD_PREFIX:-"myuser@myhost.mydomain.com:/path/to/backup/directory/on/myhost"}
 
 # form the cloud path
 CLOUD_PATH="$CLOUD_PREFIX/$BY_HOST_DIR"
@@ -123,15 +120,6 @@ echo "Attempting to fetch backup images for $RUNTAG"
 
 case "$CLOUD_METHOD" in
 
-  "LOCAL" )
-    if [ -d "$BACKUPSDIR" ] ; then
-       cp -v "$BACKUPSDIR/$RUNTAG".* "$RESTOREDIR"
-    else
-       echo "Error: $BACKUPSDIR does not exist"
-       exit 1
-    fi
-    ;;
-
   "RCLONE" )
     rclone copy -v $CLOUD_OPTIONS --include "$RUNTAG.*" "$CLOUD_PATH" "$RESTOREDIR"
     ;;
@@ -142,7 +130,7 @@ case "$CLOUD_METHOD" in
 
   * )
     echo "Warning: $CLOUD_METHOD backup method is not supported"
-    exit 1
+    echo "Warning: The only backup files are the ones in $BACKUPSDIR"
     ;;
 
 esac

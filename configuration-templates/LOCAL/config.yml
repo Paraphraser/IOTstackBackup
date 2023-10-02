@@ -1,8 +1,0 @@
-backup:
-  method: "LOCAL"
-  prefix: "$USER/IOTstack/backups"
-  retain: 8
-
-restore:
-  method: "LOCAL"
-  prefix: "$USER/IOTstack/backups"

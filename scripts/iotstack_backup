@@ -81,12 +81,11 @@ if [ -e "$CONFIG_YML" ] ; then
    LOCAL_RETAIN=$(shyaml get-value backup.retain  < "$CONFIG_YML")
 else
    echo "Warning: Configuration file not found: $CONFIG_YML"
-   echo "         (backups will only be stored on this machine)"
 fi
 
 # apply defaults if not set from configuration file
-CLOUD_METHOD=${CLOUD_METHOD:-"LOCAL"}
-CLOUD_PREFIX=${CLOUD_PREFIX:-"$HOME/IOTstack/backups"}
+CLOUD_METHOD=${CLOUD_METHOD:-"SCP"}
+CLOUD_PREFIX=${CLOUD_PREFIX:-"myuser@myhost.mydomain.com:/path/to/backup/directory/on/myhost"}
 LOCAL_RETAIN=${LOCAL_RETAIN:-"8"}
 
 # form the cloud path
@@ -158,10 +157,6 @@ iotstack_backup_postgres "$BACKUPSDIR" "$RUNTAG"
 # copy the files (keep in mind that log entries written after the
 # log is copied to the remote will only be in the local log).
 case "$CLOUD_METHOD" in
-
-  "LOCAL" )
-    echo "Warning: The only backup files are the ones in $BACKUPSDIR"
-    ;;
 
   "RCLONE" )
     rclone sync -v $CLOUD_OPTIONS \
