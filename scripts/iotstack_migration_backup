@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+
+# support user renaming of script
+SCRIPT=$(basename "$0")
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "$SCRIPT should NOT be run using sudo" && exit 1
+
+# should run without arguments
+[ $# -ne 0 ] && echo "$SCRIPT parameter(s) $@ ignored"
+
+# assumptions that can be overridden
+IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
+RUNTAG=${RUNTAG:-"migration"}
+
+# the project name is the all-lower-case form of the folder name
+PROJECT=$(basename ${IOTSTACK,,})
+
+# useful function
+isStackUp() {
+   if COUNT=$( \
+      curl -s --unix-socket /var/run/docker.sock http://localhost/containers/json | \
+      jq -c ".[].Labels.\"com.docker.compose.project\" | contains(\"$1\")" | \
+      wc -l \
+   ) ; then
+      if [ $COUNT -gt 0 ] ; then
+         return 0
+      fi
+   fi
+   return 1
+}
+
+# check dependencies
+if [ -z "$(which curl)" -o -z "$(which jq)" ] ; then
+   echo "Missing dependencies. Please re-run install_scripts.sh."
+   exit 1
+fi
+
+# assumption
+COMPOSE="$IOTSTACK/docker-compose.yml"
+
+# assertion
+
+# check the key assumptions
+if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
+   echo "Error: One of the following does not exist:"
+   echo "   $IOTSTACK"
+   echo "   $COMPOSE"
+   echo "This may indicate a problem with your installation."
+   exit 1
+fi
+
+# check IOTstack seems to be running
+if ! isStackUp "$PROJECT" ; then
+   echo "Warning: $PROJECT does not seem to be running. The general backup"
+   echo "         will work but backups for database and other special-case"
+   echo "         containers will be skipped."
+fi
+
+# perform the general backup
+iotstack_backup_general "$PWD" "$RUNTAG"
+
+# perform the influxdb 1.x backup
+iotstack_backup_influxdb "$PWD" "$RUNTAG"
+
+# perform the influxdb 2.x backup
+iotstack_backup_influxdb2 "$PWD" "$RUNTAG"
+
+# perform the nextcloud backup
+iotstack_backup_nextcloud "$PWD" "$RUNTAG"
+
+# perform the mariadb backup
+iotstack_backup_mariadb "$PWD" "$RUNTAG"
+
+# perform the postgres backup
+iotstack_backup_postgres "$PWD" "$RUNTAG"
+
+echo "----- Finished $SCRIPT at $(date) -----"

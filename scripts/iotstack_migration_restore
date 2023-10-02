@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+
+# support user renaming of script
+SCRIPT=$(basename "$0")
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "$SCRIPT should NOT be run using sudo" && exit 1
+
+# should run without arguments
+[ $# -ne 0 ] && echo "$SCRIPT parameter(s) $@ ignored"
+
+# assumptions that can be overridden
+IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
+RUNTAG=${RUNTAG:-"migration"}
+
+# the project name is the all-lower-case form of the folder name
+PROJECT=$(basename ${IOTSTACK,,})
+
+# useful function
+isStackUp() {
+   if COUNT=$( \
+      curl -s --unix-socket /var/run/docker.sock http://localhost/containers/json | \
+      jq -c ".[].Labels.\"com.docker.compose.project\" | contains(\"$1\")" | \
+      wc -l \
+   ) ; then
+      if [ $COUNT -gt 0 ] ; then
+         return 0
+      fi
+   fi
+   return 1
+}
+
+# check dependencies
+if [ -z "$(which curl)" -o -z "$(which jq)" ] ; then
+   echo "Missing dependencies. Please re-run install_scripts.sh."
+   exit 1
+fi
+
+# IOTstack directory must exist
+[ ! -d "$IOTSTACK" ] && echo "Error: $IOTSTACK does not exist" && exit 1
+
+# but no part of IOTstack can be running
+if isStackUp "$PROJECT" ; then
+   echo "Error: $PROJECT must not be running"
+   exit 1
+fi
+
+# the compose file must not exist
+COMPOSE="$IOTSTACK/docker-compose.yml"
+[ -e "$COMPOSE" ] && echo "Error: $COMPOSE already exists" && exit 1
+
+# the .env must not exist
+ENVFILE="$IOTSTACK/.env"
+[ -e "$ENVFILE" ] && echo "Error: $ENVFILE already exists" && exit 1
+
+# in most cases, services and volumes will not exist but, if they do,
+# the subordinate scripts will adopt merging behaviour
+
+# try to restore general backup (assumes general-backup.tar.gz)
+iotstack_restore_general "$PWD" "$RUNTAG"
+
+# try to restore influxdb 1.x backup (assumes "influx-backup.tar" for
+# backwards compatibility, even though "influxdb-backup.tar" would be
+# more consistent)
+iotstack_restore_influxdb  "$PWD" "$RUNTAG"
+
+# try to restore influxdb 2.x backup (assumes influxdb2-backup.tar)
+iotstack_restore_influxdb2  "$PWD" "$RUNTAG"
+
+# try to restore nextcloud backup (assumes nextcloud-backup.tar.gz)
+iotstack_restore_nextcloud "$PWD" "$RUNTAG"
+
+# try to restore mariadb backup (assumes mariadb-backup.tar.gz)
+iotstack_restore_mariadb "$PWD" "$RUNTAG"
+
+# try to restore postgres backup (assumes postgres-backup.sql.gz.tar)
+iotstack_restore_postgres "$PWD" "$RUNTAG"
+
+echo "----- Finished $SCRIPT at $(date) -----"

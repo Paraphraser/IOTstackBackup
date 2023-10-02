@@ -21,6 +21,9 @@ This project documents my approach to backup and restore of [SensorsIot/IOTstack
 
 	* When I first developed these scripts, there was no equivalent for [`iotstack_restore`](#iotstackRestore) in [SensorsIot/IOTstack](https://github.com/SensorsIot/IOTstack). That was a gap I wanted to rectify. 
 
+<a name="gamut"></a>
+## about non-copy-safe containers
+
 These scripts will never be *guaranteed* to cover the full gamut of container types supported by [SensorsIot/IOTstack](https://github.com/SensorsIot/IOTstack). The main problem lies with containers where it is unsafe to copy the container's persistent storage while the container is running. This mainly applies to database engines. The support matrix is:
 
 non-copy-safe container  | supported
@@ -91,7 +94,14 @@ Subversion               | no
 
 		- [understanding logging when cron is involved](#cronLogging)
 
+	- [monitoring disk space utilisation](#spaceUtilisation)
 	- [periodic maintenance](#periodicMaintenance)
+
+- [Migration assistant](#migration)
+
+	- [on the *old* system](#migrationOld)
+	- [on the *new* system](#migrationNew)
+	- [known limitations](#migrationLimits)
 
 - [Tutorials & Guides](#tutorials)
 
@@ -103,7 +113,7 @@ Subversion               | no
 
 This repository can be cloned anywhere on your Raspberry Pi but I recommend the `~/.local` directory:
 
-```bash
+``` console
 $ mkdir -p ~/.local
 $ cd ~/.local
 $ git clone https://github.com/Paraphraser/IOTstackBackup.git IOTstackBackup
@@ -121,13 +131,13 @@ Notes:
 
 Check the result by executing:
 
-```bash
+``` console
 $ which iotstack_backup
 ```
 
 You will either see a path like:
 
-```bash
+``` console
 /home/pi/.local/bin/iotstack_backup
 ```
 
@@ -144,7 +154,7 @@ Nextcloud backup and restore was introduced in September 2021; MariaDB in May 20
 
 	* If you normally run new menu (master branch):
 
-		```bash
+		``` console
 		$ cd ~/IOTstack
 		$ git checkout master
 		$ git pull
@@ -152,7 +162,7 @@ Nextcloud backup and restore was introduced in September 2021; MariaDB in May 20
 
 	* If you normally run old menu (old-menu branch):
 
-		```bash
+		``` console
 		$ cd ~/IOTstack
 		$ git checkout old-menu
 		$ git pull
@@ -162,13 +172,13 @@ Nextcloud backup and restore was introduced in September 2021; MariaDB in May 20
 
 	* Nextcloud
 
-		```bash
+		``` console
 		$ cat ~/IOTstack/.templates/nextcloud/service.yml
 		```
 
 		At the time of writing, the new menu version it looked like this:
 
-		```yaml
+		``` yaml
 		nextcloud:
 		  container_name: nextcloud
 		  image: nextcloud
@@ -211,13 +221,13 @@ Nextcloud backup and restore was introduced in September 2021; MariaDB in May 20
 
 	* MariaDB
 
-		```bash
+		``` console
 		$ cat ~/IOTstack/.templates/mariadb/service.yml
 		```
 
 		At the time of writing, the new menu version it looked like this:
 
-		```yaml
+		``` yaml
 		mariadb:
 		  build: ./.templates/mariadb/.
 		  container_name: mariadb
@@ -245,7 +255,7 @@ Nextcloud backup and restore was introduced in September 2021; MariaDB in May 20
 
 	* Nextcloud
 
-		```bash
+		``` console
 		$ docker ps --format "table {{.Names}}\t{{.RunningFor}}\t{{.Status}}" --filter name=nextcloud_db
 		```
 
@@ -258,7 +268,7 @@ Nextcloud backup and restore was introduced in September 2021; MariaDB in May 20
 
 	* MariaDB
 
-		```bash
+		``` console
 		$ docker ps --format "table {{.Names}}\t{{.RunningFor}}\t{{.Status}}" --filter name=mariadb
 		```
 
@@ -275,7 +285,7 @@ Nextcloud backup and restore was introduced in September 2021; MariaDB in May 20
 
 	The health check process for MariaDB containers was added to IOTstack on 2021-10-17. If you do **not** see evidence that your containers are running their health checks, you probably need to rebuild either or both, like this:
 
-	```bash
+	``` console
 	$ cd ~/IOTstack
 	$ docker-compose build --no-cache --pull «container»
 	$ docker-compose up -d «container»
@@ -302,7 +312,7 @@ InfluxDB&nbsp;2 support was added to IOTstackBackup in May 2022. See also:
 
 Make sure your system satisfies the following dependencies:
 
-```bash
+``` console
 $ sudo apt install -y rsync python3-pip python3-dev curl jq wget
 $ curl https://rclone.org/install.sh | sudo bash
 $ sudo pip3 install -U shyaml
@@ -436,14 +446,14 @@ To repeat:
 
 You can install a template [configuration file](#configFile) for *scp* like this:
 
-```bash
+``` console
 $ cd ~/.local/IOTstackBackup/configuration-templates
 $ ./install_template.sh SCP
 ``` 
 
 The template is:
 
-```yaml
+``` yaml
 backup:
   method: "SCP"
   prefix: "user@host.domain.com:path/to/backups"
@@ -464,7 +474,7 @@ You should test connectivity like this:
 
 1. Replace the right hand side with your actual values and execute the command:
 
-	```bash
+	``` console
 	$ PREFIX="user@host.domain.com:path/to/backups"
 	```
 
@@ -476,7 +486,7 @@ You should test connectivity like this:
 
 2. Test sending from this host to the remote host:
 
-	```bash
+	``` console
 	$ touch test.txt
 	$ scp test.txt "$PREFIX/test.txt"
 	$ rm test.txt
@@ -484,7 +494,7 @@ You should test connectivity like this:
 
 3. Test fetching from the remote host to this host:
 
-	```bash
+	``` console
 	$ scp "$PREFIX/test.txt" ./test.txt
 	$ rm test.txt
 	```
@@ -505,14 +515,14 @@ The `~/IOStack/backups` directory is trimmed at the end of each backup run. The 
 
 You can install a template [configuration file](#configFile) for *rsync* like this:
 
-```bash
+``` console
 $ cd ~/.local/IOTstackBackup/configuration-templates
 $ ./install_template.sh RSYNC
 ``` 
 
 The template is:
 
-```yaml
+``` yaml
 backup:
   method: "RSYNC"
   prefix: "user@host.domain.com:path/to/backups"
@@ -535,14 +545,14 @@ Selecting *rclone* unleashes the power of that package. However, this guide only
 
 You can install a template [configuration file](#configFile) for *rclone* like this:
 
-```bash
+``` console
 $ cd ~/.local/IOTstackBackup/configuration-templates
 $ ./install_template.sh RCLONE
 ``` 
 
 The template is:
 
-```yaml
+``` yaml
 backup:
   method: "RCLONE"
   prefix: "remote:path/to/backups"
@@ -569,7 +579,7 @@ The *authorising computer* **can** be your Raspberry Pi, providing it meets thos
 
 If the *authorising computer* is another computer then it should be running the same (or reasonably close) version of *rclone* as your Raspberry Pi. You should check both systems with:
 
-```bash
+``` console
 $ rclone version
 ```
 
@@ -579,7 +589,7 @@ and perform any necessary software updates before you begin.
 
 1. Open a Terminal window and run the command:
 
-	```bash
+	``` console
 	$ rclone authorize "dropbox"
 	```
 
@@ -622,7 +632,7 @@ and perform any necessary software updates before you begin.
 
 1. Open a Terminal window and run the command:
 
-	```bash
+	``` console
 	$ rclone config
 	```
 
@@ -660,7 +670,7 @@ and perform any necessary software updates before you begin.
 12. Press <kbd>q</kbd> and <kbd>return</kbd> to "Quit config".
 13. Check your work:
 
-	```bash
+	``` console
 	$ rclone listremotes
 	```
 
@@ -688,7 +698,7 @@ You should test connectivity like this:
 
 1. Replace the right hand side of the following with your actual values and then execute the command:
 
-	```bash
+	``` console
 	$ PREFIX="dropbox:path/to/backups"
 	```
 
@@ -701,7 +711,7 @@ You should test connectivity like this:
 
 2. Test communication with Dropbox:
 
-	```bash
+	``` console
 	$ rclone ls "$PREFIX"
 	```
 
@@ -722,7 +732,7 @@ For example, suppose you configure your Raspberry Pi to backup direct to Dropbox
 
 Now comes time to restore. You may wish to take advantage of the fact that your laptop is available, so you can mix and match like this:
 
-```yaml
+``` yaml
 backup:
   method: "RCLONE"
   prefix: "remote:path/to/backups"
@@ -738,7 +748,7 @@ restore:
 
 You can use the following command to check your [configuration file](#configFile): 
 
-```bash
+``` console
 $ show_iotstackbackup_configuration
 ```
 
@@ -751,7 +761,6 @@ The script will:
 
 If this script returns sensible results that reflect what you have placed in the configuration file then you can be reasonably confident that the backup and restore scripts will behave in a way that implements your intention.
 
-<a name="configChecking"></a>
 #### if you get a traceback …
 
 `show_iotstackbackup_configuration` uses the `shyaml` package to extract information from your [configuration file](#configFile). In turn, `shyaml` calls a YAML parsing API to scan your [configuration file](#configFile) and turn it into structures that can be interpreted by `shyaml`.
@@ -824,7 +833,7 @@ In general, [`iotstack_backup`](#iotstackBackup) is the script you should call.
 
 Usage:
 
-```bash
+``` console
 $ iotstack_backup {«runtag»} {by_host_id}
 ```
 
@@ -858,7 +867,7 @@ Usage (three forms):
 
 1. Single-argument form:
 
-	```bash
+	``` console
 	$ iotstack_backup_general path/to/backupFile.tar.gz
 	```
 
@@ -868,7 +877,7 @@ Usage (three forms):
 
 	Example:
 
-	```bash
+	``` console
 	$ cd
 	$ mkdir my_special_backups
 	$ cd my_special_backups
@@ -877,7 +886,7 @@ Usage (three forms):
 
 2. Two-argument form:
 
-	```bash
+	``` console
 	$ iotstack_backup_general path/to/backupdir «runtag»
 	```
 
@@ -891,7 +900,7 @@ Usage (three forms):
 
 3. Three-argument form:
 
-	```bash
+	``` console
 	$ iotstack_backup_general path/to/backupdir «runtag» filename
 	```
 
@@ -935,7 +944,7 @@ Usage (three forms):
 
 1. Single-argument form:
 
-	```bash
+	``` console
 	$ «script» path/to/backupFile
 	```
 
@@ -945,7 +954,7 @@ Usage (three forms):
 
 	Example:
 
-	```bash
+	``` console
 	$ cd
 	$ mkdir my_special_backups
 	$ cd my_special_backups
@@ -954,7 +963,7 @@ Usage (three forms):
 
 2. Two-argument form:
 
-	```bash
+	``` console
 	$ «script» path/to/backupdir «runtag»
 	```
 
@@ -970,7 +979,7 @@ Usage (three forms):
 
 3. Three-argument form:
 
-	```bash
+	``` console
 	$ «script» path/to/backupdir «runtag» filename
 	```
 
@@ -1000,13 +1009,13 @@ In general, [`iotstack_restore`](#iotstackRestore) is the script you should call
 
 Usage:
 
-```bash
+``` console
 $ iotstack_restore «runtag» {«by_host_dir»}
 ```
 
 * [«runtag»](#aboutRuntag) is a _required_ argument which must exactly match the «runtag» used by the [`iotstack_backup`](#iotstackBackup) run you wish to restore. For example:
 
-	```bash
+	``` console
 	$ iotstack_restore 2022-05-24_1138.iot-hub
 	```
 
@@ -1052,7 +1061,7 @@ Usage (three forms):
 
 1. Single-argument form:
 
-	```bash
+	``` console
 	$ iotstack_restore_general path/to/backupFile.tar.gz
 	```
 
@@ -1062,14 +1071,14 @@ Usage (three forms):
 
 	Example:
 
-	```bash
+	``` console
 	$ cd ~/my_special_backups
 	$ iotstack_restore_general before_major_changes.tar.gz
 	```
 
 2. Two-argument form:
 
-	```bash
+	``` console
 	$ iotstack_restore_general path/to/backupdir «runtag»
 	```
 
@@ -1083,7 +1092,7 @@ Usage (three forms):
 
 3. Three-argument form:
 
-	```bash
+	``` console
 	$ iotstack_restore_general path/to/backupdir «runtag» filename
 	```
 
@@ -1150,7 +1159,7 @@ Usage (three forms):
 
 1. Single-argument form:
 
-	```bash
+	``` console
 	$ «script» path/to/backupFile
 	```
 
@@ -1160,14 +1169,14 @@ Usage (three forms):
 
 	Example:
 
-	```bash
+	``` console
 	$ cd ~/my_special_backups
 	$ iotstack_restore_influxdb before_major_changes.tar
 	```
 
 2. Two-argument form:
 
-	```bash
+	``` console
 	$ «script» path/to/backupdir «runtag»
 	```
 
@@ -1183,7 +1192,7 @@ Usage (three forms):
 
 3. Three-argument form:
 
-	```bash
+	``` console
 	$ «script» path/to/backupdir «runtag» filename
 	```
 
@@ -1211,7 +1220,7 @@ Note:
 * The presence of a backup file for a container assumes the existence of a corresponding service definition in the compose file. Violating this assumption will lead to a mess.
 
 	To put this another way, restoring a database container needs the involvement of the database engine. The only way the database engine can be made available to the restore script is if docker-compose can bring up the relevant container when commanded to do so by the script and that, in turn, relies on the existence of an appropriate service definition in the compose file.
-	
+
 	This is also why [`iotstack_restore_general`](#iotstackRestoreGeneral) runs first, because it is assumed to guarantee the presence of an appropriate compose file, particularly during a bare-metal restore. 
 
 <a name="bareMetalRestore"></a>
@@ -1244,13 +1253,13 @@ IOTstackBackup supports the following environment variables:
 
 	One of the key assumptions for IOTstack is that you begin by running:
 
-	```bash
+	``` console
 	$ git clone https://github.com/SensorsIot/IOTstack.git ~/IOTstack
 	```
 
 	IOTstackBackup relies on `~/IOTstack` being present and containing the expected files and folders. If you decide to use a different name for the top-level folder, you communicate this to IOTstackBackup using the `IOTSTACK` environment variable. For example:
 
-	```bash
+	``` console
 	$ IOTSTACK="$HOME/MyStack" iotstack_backup
 	```
 
@@ -1271,7 +1280,7 @@ IOTstackBackup supports the following environment variables:
 
 	If you want to backup the `IOTstack.test` directory, run:
 
-	```bash
+	``` console
 	$ IOTSTACK="$HOME/IOTstack.test" iotstack_backup $(date +"%Y-%m-%d_%H%M").$HOSTNAME.test
 	```
 
@@ -1287,13 +1296,13 @@ IOTstackBackup supports the following environment variables:
 	2. The `container_name` is `mydb`.
 	3. The prefixes of the external paths in the `volumes` statements begin with:
 
-		```yaml
+		``` yaml
 		- ./volumes/mydb/
 		```
 
 	Providing you conform with those conventions, you can use the `CONTAINER` environment variable to backup and restore your container:
 
-	```bash
+	``` console
 	$ CONTAINER="mydb" iotstack_backup_mariadb mydb-backup.tar.gz
 	$ CONTAINER="mydb" iotstack_restore_mariadb mydb-backup.tar.gz
 	```
@@ -1309,13 +1318,13 @@ Usage:
 
 * InfluxDB 1.8
 
-	```bash
+	``` console
 	$ iotstack_reload_influxdb
 	```
 
 * InfluxDB 2
 
-	```bash
+	``` console
 	$ iotstack_reload_influxdb2
 	```
 
@@ -1337,7 +1346,7 @@ There is some downtime while this process runs but it is kept to a minimum.
 
 When omitted as an argument to [`iotstack_backup`](#iotstackBackup), «runtag» defaults to the current date-time value in the format *yyyy-mm-dd_hhmm* followed by the host name as determined from the HOSTNAME environment variable. For example:
 
-```bash
+``` console
 $ RUNTAG=$(date +"%Y-%m-%d_%H%M").$HOSTNAME
 $ echo $RUNTAG
 2022-05-24_1138.iot-hub
@@ -1365,7 +1374,7 @@ The scripts will **not** protect you if you ignore these rules. You **will** cre
 
 If Nextcloud backup fails, you may find that Nextcloud has been left in "maintenance mode" and you are locked out. To take Nextcloud out of maintenance mode:
 
-```bash
+``` console
 $ docker exec -u www-data -it nextcloud php occ maintenance:mode --off
 ```
 
@@ -1381,13 +1390,13 @@ Setup:
 
 1. Scaffolding:
 
-	```bash
+	``` console
 	$ mkdir ~/Logs
 	```
 
 2. If you don't have an existing crontab, you can download this template and use it to initialise your system:
 
-	```bash
+	``` console
 	$ wget -qO my-crontab.txt https://raw.githubusercontent.com/Paraphraser/PiBuilder/master/boot/scripts/support/home/pi/crontab
 	$ crontab my-crontab.txt
 	$ rm my-crontab.txt
@@ -1406,19 +1415,19 @@ Setup:
 
 4. Once you have designed your crontab entries, you need to edit your working crontab to include them:
 
-	```bash
+	``` console
 	$ crontab -e
 	```
 
 	That command uses the default Unix editor which you set using the `EDITOR` environment variable. As an alternative, you can export your working crontab to a text file:
 
-	```bash
+	``` console
 	$ crontab -l >my-crontab.txt
 	```
 
 	Then you can edit `my-crontab.txt ` using the text editor of your choice. Once you are ready and want to import your new crontab:
 
-	```bash
+	``` console
 	$ crontab my-crontab.txt
 	```
 
@@ -1453,12 +1462,92 @@ If you are short on storage space, either on your Pi or on your remote (eg Dropb
 
 From time to time, you should synchronise your local copy of the IOTstackBackup repository with GitHub and then reinstall the scripts:
 
-```bash
+``` console
 $ cd ~/.local/IOTstackBackup
 $ git checkout master
 $ git pull
 $ ./install_scripts.sh
 ```
+
+<a name="migration"></a>
+## Migration assistant
+
+If you are in the situation where you want to migrate to a new system but you were not running IOTstackBackup on your old system, you may want to take the shortcut described below.
+
+<a name="migrationOld"></a>
+### on the *old* system
+
+1. <a name="oldIsUp"></a>Your IOTstack must be up and **running**.
+2. Follow all the steps in [download repository](#downloadRepository). If the installer script complains about missing dependencies, follow the instructions displayed by the script.
+3. Create a directory to hold the migration images and make that your working directory:
+
+	``` console
+	$ mkdir ~/migration
+	$ cd ~/migration
+	```
+
+	> the name `migration` is not significant - you can give the folder any name you like
+
+4. Run the migration backup tool:
+
+	``` console
+	$ iotstack_migration_backup
+	```
+
+5. Copy the migration directory to the new machine. The choice of method is up to you. You could use a thumb drive or Samba share. Here's an example using SCP:
+
+	```
+	$ cd ..
+	$ scp -r migration «user»@«host»:.
+	```
+
+	where:
+
+	* `«host»` is the IP address, hostname, domain name or multicast domain name of the *new* system; and
+	* `«user»` is the username on the *new* system of the user who will be managing IOTstack.
+
+<a name="migrationNew"></a>
+### on the *new* system
+
+1. The *new* system must have been constructed using [PiBuilder](https://github.com/Paraphraser/PiBuilder) and you should have just finished running the 05 script.
+
+2. The migration package must be present:
+
+	> The instructions below assume `~/migration`. Make appropriate substitutions if you used a different name
+
+3. Run the following commands:
+
+	``` console
+	$ cd ~/migration
+	$ iotstack_migration_restore
+	``` 
+
+4. Assuming the restore succeeds without error, you can then bring up your stack:
+
+	``` console
+	$ cd ~/IOTstack
+	$ docker-compose up -d
+	```
+
+<a name="migrationLimits"></a>
+### known limitations
+
+Please read [about non-copy-safe containers](#gamut) carefully. If your *old* system is running non-copy-safe containers, those containers may not function correctly on the *new* system.
+
+Technically, the requirement that [your IOTstack must be up and **running**](#oldIsUp) only applies to the non-copy-safe containers that are **supported** by IOTstackBackup (InfluxDB 1.8, InfluxDB 2, MariaDB, NextCloud and NextCloudDB, and Postgres).
+
+If you know that your IOTstack contains non-copy-safe containers then you can usually "fake" the migration backup into capturing the persistent stores in a copy-safe manner by terminating the affected containers before running the backup command.
+
+For example, if you have a container named "example" which is non-copy-safe, you can proceed like this:
+
+``` console
+$ cd ~/IOTstack
+$ docker-compose rm --force --stop -v example
+$ cd ~/migration
+$ iotstack_migration_backup
+```
+
+This method is not *guaranteed* to work. It may still fail if the container uses file-system tricks such as hard links. In such situations, there really is no substitute for figuring out how to get the container to perform its own backup and restore, and then encapsulate that knowledge in another pair of subordinate scripts. 
 
 <a name="tutorials"></a>
 ## Tutorials & Guides
