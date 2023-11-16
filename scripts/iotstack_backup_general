@@ -88,6 +88,7 @@ cat <<-EXCLUSIONS >"$BACKUP_EXCLUDE"
 ./volumes/influxdb
 ./volumes/influxdb2
 ./volumes/mariadb
+./volumes/motioneye/var_lib_motioneye
 ./volumes/nextcloud
 ./volumes/postgres
 ./volumes/pihole.restored

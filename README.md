@@ -929,13 +929,19 @@ Providing only that it can identify a viable IOTstack installation, this script 
 	* `influxdb`
 	* `influxdb2`
 	* `mariadb`
+	* `motioneye/var_lib_motioneye` <sup>1</sup>
 	* `nextcloud`
-	* `postgres` <sup>†</sup>
-	* `subversion` <sup>†</sup>
+	* `postgres` <sup>2</sup>
+	* `subversion` <sup>2</sup>
 	* `pihole.restored`
+	* `zigbee2mqtt/data/log` <sup>3</sup>
 	* `lost+found`
 
-	† omitted because the container is not copy-safe but, as yet, there is no container-specific backup script. If you run either container and want to take the risk, just remove the exclusion from the script.
+	Notes:
+	
+	1. where videos are stored. Depending on things like frame rate, the ±time around a trigger you wish to preserve, and the numbers of days you wish to preserve, this folder can be **massive** so it is omitted by default. If you wish to include old videos in your backups, just remove the exclusion from the script.
+	2. omitted because the container is not copy-safe but, as yet, there is no container-specific backup script. If you run either container and want to take the risk, just remove the exclusion from the script.
+	3. the way Zigbee2MQTT maintains its logs is not amenable to *restoration* so there is little point including the logs in backups.
 
 <a name="iotstackBackupContainer"></a>
 ### iotstack\_backup\_*«container»*
