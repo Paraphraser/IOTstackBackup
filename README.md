@@ -834,7 +834,7 @@ In general, [`iotstack_backup`](#iotstackBackup) is the script you should call.
 Usage:
 
 ``` console
-$ iotstack_backup {«runtag»} {by_host_id}
+$ iotstack_backup {«runtag»} {by_host_dir}
 ```
 
 * «runtag» is an _optional_ argument which defaults to syntax defined at [about «runtag»](#aboutRuntag) For example:
@@ -843,7 +843,7 @@ $ iotstack_backup {«runtag»} {by_host_id}
 	2022-05-24_1138.iot-hub
 	```
 
-* *by\_host\_dir* is an _optional_ argument which defaults to the value of the HOSTNAME environment variable.
+* *by\_host\_dir* is an _optional_ argument which defaults to the value of the HOSTNAME environment variable. The \_dir suffix refers to how this string is used. When backup files are transmitted to another system, they are stored in a directory with this name.
 
 In general, you should run `iotstack_backup` without parameters. If you decide to use parameters, please make sure you test thoroughly before you rely on the result in a production system.
 
@@ -1037,7 +1037,7 @@ $ iotstack_restore «runtag» {«by_host_dir»}
 	iot-hub
 	```
 
-	If you pass a [«runtag»](#aboutRuntag) which can't be parsed to extract the «by\_host\_dir» then you must also pass a valid «by\_host\_dir».
+	If you pass a [«runtag»](#aboutRuntag) which can't be parsed to extract the «by\_host\_dir» then you must also pass a valid «by\_host\_dir». The \_dir suffix refers to how this string is used. When backup files are retrieved from another system, the directory on the remote host that is searched is the one with this name.
 
 The script:
 
