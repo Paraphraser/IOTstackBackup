@@ -111,6 +111,10 @@ Subversion               | no
 <a name="downloadRepository"></a>
 ### Download repository
 
+Note:
+
+* [PiBuilder](https://github.com/Paraphraser/PiBuilder) clones and installs IOTstackBackup and satisfies its dependencies. If you used PiBuilder, skip the rest of this section and pick up at [Preparing for Nextcloud and MariaDB backups](#nextcloudMariaDBprep).
+
 This repository can be cloned anywhere on your Raspberry Pi but I recommend the `~/.local` directory:
 
 ``` console
@@ -310,13 +314,26 @@ InfluxDB&nbsp;2 support was added to IOTstackBackup in May 2022. See also:
 <a name="installDependencies"></a>
 ### Install dependencies
 
-Make sure your system satisfies the following dependencies:
+Make sure your system satisfies the dependencies. First run:
 
 ``` console
 $ sudo apt install -y rsync python3-pip python3-dev curl jq wget
 $ curl https://rclone.org/install.sh | sudo bash
-$ sudo pip3 install -U shyaml
 ```
+	
+Then:
+
+- If you are running Bullseye or earlier:
+
+	``` console
+	$ pip3 install -U shyaml
+	```
+	
+- If you are running Bookworm:
+
+	``` console
+	$ pip3 install -U --break-system-packages shyaml
+	```
 
 Some (or all) may be installed already on your Raspberry Pi. Some things to note:
 
