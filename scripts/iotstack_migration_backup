@@ -20,8 +20,8 @@ PROJECT=$(basename ${IOTSTACK,,})
 isStackUp() {
    if COUNT=$( \
       curl -s --unix-socket /var/run/docker.sock http://localhost/containers/json | \
-      jq -c ".[].Labels.\"com.docker.compose.project\" | contains(\"$1\")" | \
-      wc -l \
+      jq -c ".[].Labels.\"com.docker.compose.project\"" | \
+      grep -c "\"$1\"$" \
    ) ; then
       if [ $COUNT -gt 0 ] ; then
          return 0
