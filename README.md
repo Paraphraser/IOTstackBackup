@@ -32,14 +32,19 @@ InfluxDB 1.8             | yes
 InfluxDB 2               | yes
 MariaDB                  | yes
 Nextcloud + Nextcloud_DB | yes
-Postgres                 | yes <sup>†</sup>
+Postgres                 | yes <sup>1</sup>
 Subversion               | no
+WordPress                | yes <sup>2</sup>
 
-† 2023-Feb-08 Depends on:
+Notes:
 
-1. [PR661](https://github.com/SensorsIot/IOTstack/pull/661) and [PR662](https://github.com/SensorsIot/IOTstack/pull/662) being merged into IOTstack (which was done on 2023-03-02); **and**
-2. You updating your local copy of IOTstack (eg `git pull`); **and**
-2. Adoption of the updated service definition for Postgres in your compose file.
+1. 2023-Feb-08 depends on:
+
+	* [PR661](https://github.com/SensorsIot/IOTstack/pull/661) and [PR662](https://github.com/SensorsIot/IOTstack/pull/662) being merged into IOTstack (which was done on 2023-03-02); **and**
+	* You updating your local copy of IOTstack (eg `git pull`); **and**
+	* Adoption of the updated service definition for Postgres in your compose file.
+
+2. 2024-Mar-30 depends on [PR759](https://github.com/SensorsIot/IOTstack/pull/759) and [PR760](https://github.com/SensorsIot/IOTstack/pull/760) being merged into IOTstack.
 
 ## Contents
 
@@ -823,6 +828,8 @@ Each extension implies the file's internal format. Violating this convention lea
 `iotstack_backup_influxdb2` | `influxdb2-backup.tar`
 `iotstack_backup_mariadb`   | `mariadb-backup.tar.gz`
 `iotstack_backup_nextcloud` | `nextcloud-backup.tar.gz`
+`iotstack_backup_postgres`  | `postgres-backup.tar.gz`
+`iotstack_backup_wordpress` | `wordpress-backup.tar.gz`
 
 † The default file name for InfluxDB&nbsp;1.8 is an exception. It would be more consistent to use `influxdb-backup.tar` but maintaining backwards compatibility demands `influx-backup.tar`.
 
@@ -835,6 +842,8 @@ Each extension implies the file's internal format. Violating this convention lea
 `iotstack_backup_influxdb2` | `influxdb2`
 `iotstack_backup_mariadb`   | `mariadb`
 `iotstack_backup_nextcloud` | `nextcloud` + `nextcloud_db`
+`iotstack_backup_postgres`  | `postgres`
+`iotstack_backup_wordpress` | `wordpress` + `wordpress_db`
 
 <a name="backupSide"></a>
 ## The backup side of things
@@ -872,6 +881,7 @@ The script invokes:
 * [`iotstack_backup_nextcloud`](#iotstackBackupContainer)
 * [`iotstack_backup_mariadb`](#iotstackBackupContainer)
 * [`iotstack_backup_postgres`](#iotstackBackupContainer)
+* [`iotstack_backup_wordpress`](#iotstackBackupContainer)
 
 The results of those are placed in `~/IOTstack/backups` along with a log file containing everything written to `stdout` and `stderr` as the script executed.
 
@@ -946,11 +956,13 @@ Providing only that it can identify a viable IOTstack installation, this script 
 	* `influxdb`
 	* `influxdb2`
 	* `mariadb`
+	* `mosquitto/data`
 	* `motioneye/var_lib_motioneye` <sup>1</sup>
 	* `nextcloud`
-	* `postgres` <sup>2</sup>
-	* `subversion` <sup>2</sup>
+	* `postgres`
+	* `wordpress`
 	* `pihole.restored`
+	* `subversion`  <sup>2</sup>
 	* `zigbee2mqtt/data/log` <sup>3</sup>
 	* `lost+found`
 
@@ -1067,6 +1079,7 @@ The script:
 * Invokes [`iotstack_restore_nextcloud`](#iotstackRestoreContainer)
 * Invokes [`iotstack_restore_mariadb`](#iotstackRestoreContainer)
 * Invokes [`iotstack_restore_postgres`](#iotstackRestoreContainer)
+* Invokes [`iotstack_restore_wordpress`](#iotstackRestoreContainer)
 * Cleans-up the temporary directory
 * Reactivates your stack if it was deactivated by this script.
 

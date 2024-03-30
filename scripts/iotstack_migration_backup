@@ -57,22 +57,13 @@ if ! isStackUp "$PROJECT" ; then
    echo "         containers will be skipped."
 fi
 
-# perform the general backup
+# perform the backups
 iotstack_backup_general "$PWD" "$RUNTAG"
-
-# perform the influxdb 1.x backup
 iotstack_backup_influxdb "$PWD" "$RUNTAG"
-
-# perform the influxdb 2.x backup
 iotstack_backup_influxdb2 "$PWD" "$RUNTAG"
-
-# perform the nextcloud backup
 iotstack_backup_nextcloud "$PWD" "$RUNTAG"
-
-# perform the mariadb backup
 iotstack_backup_mariadb "$PWD" "$RUNTAG"
-
-# perform the postgres backup
 iotstack_backup_postgres "$PWD" "$RUNTAG"
+iotstack_backup_wordpress "$PWD" "$RUNTAG"
 
 echo "----- Finished $SCRIPT at $(date) -----"

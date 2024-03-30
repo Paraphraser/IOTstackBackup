@@ -92,6 +92,7 @@ cat <<-EXCLUSIONS >"$BACKUP_EXCLUDE"
 ./volumes/motioneye/var_lib_motioneye
 ./volumes/nextcloud
 ./volumes/postgres
+./volumes/wordpress
 ./volumes/pihole.restored
 ./volumes/subversion
 ./volumes/zigbee2mqtt/data/log

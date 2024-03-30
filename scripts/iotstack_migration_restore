@@ -56,24 +56,13 @@ ENVFILE="$IOTSTACK/.env"
 # in most cases, services and volumes will not exist but, if they do,
 # the subordinate scripts will adopt merging behaviour
 
-# try to restore general backup (assumes general-backup.tar.gz)
+# try to perform the restores
 iotstack_restore_general "$PWD" "$RUNTAG"
-
-# try to restore influxdb 1.x backup (assumes "influx-backup.tar" for
-# backwards compatibility, even though "influxdb-backup.tar" would be
-# more consistent)
 iotstack_restore_influxdb  "$PWD" "$RUNTAG"
-
-# try to restore influxdb 2.x backup (assumes influxdb2-backup.tar)
 iotstack_restore_influxdb2  "$PWD" "$RUNTAG"
-
-# try to restore nextcloud backup (assumes nextcloud-backup.tar.gz)
 iotstack_restore_nextcloud "$PWD" "$RUNTAG"
-
-# try to restore mariadb backup (assumes mariadb-backup.tar.gz)
 iotstack_restore_mariadb "$PWD" "$RUNTAG"
-
-# try to restore postgres backup (assumes postgres-backup.sql.gz.tar)
 iotstack_restore_postgres "$PWD" "$RUNTAG"
+iotstack_restore_wordpress "$PWD" "$RUNTAG"
 
 echo "----- Finished $SCRIPT at $(date) -----"
