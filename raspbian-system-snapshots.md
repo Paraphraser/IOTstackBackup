@@ -146,8 +146,11 @@ Notes:
 
 * [PiBuilder](https://github.com/Paraphraser/PiBuilder) makes the following copies in its 01 script:
 
-	- `/boot/config.txt` is copied as `/boot/config.txt.baseline`
-	- `/boot/cmdline.txt` is copied as `/boot/cmdline.txt.baseline`
+	- within either `/boot/firmware` (Bookworm and later) or `/boot` (Bullseye and earlier):
+
+		- `config.txt` is copied as `config.txt.baseline`
+		- `cmdline.txt` is copied as `cmdline.txt.baseline`
+
 	- the entire `/etc` directory is copied as `/etc-baseline`
 
 	The intention is that you will always have reference copies of files and folder structures "as shipped" with your Raspberry Pi OS image immediately after its first boot.
@@ -163,6 +166,8 @@ Notes:
 	```
 	/boot/config.txt*
 	/boot/cmdline.txt*
+	/boot/firmware/config.txt*
+	/boot/firmware/cmdline.txt*
 	```
 	
 	In other words, if you also follow the convention of maintaining `.bak` files, those will get included along with the `.baseline` files.

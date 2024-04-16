@@ -163,6 +163,7 @@ done
 # guaranteed to exist get added to the list and don't trigger spurious
 # warnings from tar
 ls -1 /boot/config.txt* /boot/cmdline.txt* >>"$WORKING_INCLUDE"
+ls -1 /boot/firmware/config.txt* /boot/firmware/cmdline.txt* >>"$WORKING_INCLUDE"
 echo "$ANNOTATIONS" >>"$WORKING_INCLUDE"
 
 # create the file (sets ownership correctly)
