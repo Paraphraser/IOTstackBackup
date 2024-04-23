@@ -85,6 +85,9 @@ done
 BACKUP_EXCLUDE="$(mktemp -p /dev/shm/)"
 cat <<-EXCLUSIONS >"$BACKUP_EXCLUDE"
 ./mkdocs.yml
+./volumes/domoticz/domocookie.txt
+./volumes/domoticz/domoticz.db-shm
+./volumes/domoticz/domoticz.db-wal
 ./volumes/influxdb
 ./volumes/influxdb2
 ./volumes/mariadb

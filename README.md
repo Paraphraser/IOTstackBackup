@@ -953,6 +953,12 @@ Providing only that it can identify a viable IOTstack installation, this script 
 * everything in `~/IOTstack/services`
 * everything in `~/IOTstack/volumes`, except:
 
+	* the following files in the `domoticz` sub-directory:
+
+		- `domocookie.txt` (web login cookies)
+		- `domoticz.db-wal` (SQLite write-ahead log)
+		- `domoticz.db-shm` (index to the write-ahead log)
+
 	* `influxdb`
 	* `influxdb2`
 	* `mariadb`
