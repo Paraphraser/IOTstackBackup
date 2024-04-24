@@ -6,6 +6,9 @@ SCRIPT=$(basename "$0")
 # should not run as root
 [ "$EUID" -eq 0 ] && echo "$SCRIPT should NOT be run using sudo" && exit 1
 
+# this script should be run without arguments
+[ $# -ne 0 ] && echo "$SCRIPT parameter(s) $@ ignored"
+
 # assumptions that can be overridden
 IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
 CONTAINER="${CONTAINER:-"influxdb"}"
@@ -23,35 +26,42 @@ isContainerRunning() {
    return 1
 }
 
-# the compose file is
+# assumptions
 COMPOSENAME="docker-compose.yml"
-COMPOSE="$IOTSTACK/$COMPOSENAME"
+CQSNAME="continuous-queries.influxql"
+EPILOGNAME="iotstack_restore_$CONTAINER.epilog"
 
-# the backup directory is
-BACKUPDIR="$IOTSTACK/backups"
+COMPOSE="$IOTSTACK/$COMPOSENAME"
+BACKUPS="$IOTSTACK/backups"
+EXTERNALEPILOG="$IOTSTACK/services/$CONTAINER/$EPILOGNAME"
+INTERNALEPILOG="/$(uuidgen).epilog"
+EXTERNALBACKUP="$BACKUPS/$CONTAINER"
+EXTERNALBACKUPDB="$EXTERNALBACKUP/db"
+INTERNALBACKUPDB="/var/lib/influxdb/backup"
+INFLUXDATA="$IOTSTACK/volumes/$CONTAINER/data"
+EXTERNALCQS="$EXTERNALBACKUPDB/$CQSNAME"
+INTERNALCQS="$INTERNALBACKUPDB/$CQSNAME"
 
 # ensure the backup directory exists
-[ -d "$BACKUPDIR" ] || mkdir "$BACKUPDIR"
-
-# backup paths
-INFLUXBACKUPOLD="$BACKUPDIR/$CONTAINER/db_old"
-INFLUXBACKUPNEW="$BACKUPDIR/$CONTAINER/db"
-
-# the influx data directory is
-INFLUXDATA="$IOTSTACK/volumes/$CONTAINER/data"
+[ -d "$BACKUPS" ] || mkdir "$BACKUPS"
 
 # is influx running?
 if isContainerRunning "$CONTAINER" ; then
 
-	# yes! prepare the environment
-	echo "Moving old $CONTAINER backups if they exist"
-	[ -d "$INFLUXBACKUPOLD" ] || sudo mkdir "$INFLUXBACKUPOLD"
-	sudo rm "$INFLUXBACKUPOLD"/*
-	sudo mv "$INFLUXBACKUPNEW"/* "$INFLUXBACKUPOLD"
-
-	# execute the backup command
+	# yes! execute the backup command
 	echo "backing up $CONTAINER databases"
-	docker exec "$CONTAINER" influxd backup -portable /var/lib/influxdb/backup
+	docker exec "$CONTAINER" influxd backup -portable "$INTERNALBACKUPDB"
+	
+	# attempt to collect any continuous queries
+	echo "Extracting any continuous queries"
+	docker exec influxdb bash -c \
+		"influx -execute 'SHOW CONTINUOUS QUERIES' \
+		| grep 'CREATE CONTINUOUS QUERY' \
+		| sed 's/^.*CREATE CONTINUOUS QUERY/CREATE CONTINUOUS QUERY/g' \
+		>$INTERNALCQS"
+
+	# remove if an empty file was created (ie no continuous queries)
+	[ -f "$EXTERNALCQS" -a ! -s "$EXTERNALCQS" ] && rm "$EXTERNALCQS"
 
 	echo "deactivating $CONTAINER"
 	docker-compose -f "$COMPOSE" rm --force --stop -v "$CONTAINER"
@@ -69,24 +79,29 @@ if isContainerRunning "$CONTAINER" ; then
 	done
 
 	echo "reloading the influx databases"
-	docker exec "$CONTAINER" influxd restore -portable /var/lib/influxdb/backup
+	docker exec "$CONTAINER" influxd restore -portable "$INTERNALBACKUPDB"
 
-	# define the target for the epilog which can be used to reconstruct
-	# elements like continuous queries which do not survive backup/restore
-	EPILOG_NAME="iotstack_restore_$CONTAINER.epilog"
-	EPILOG_PATH="$IOTSTACK/services/$CONTAINER/$EPILOG_NAME"
+	# are there any continuous queries to be reloaded?
+	echo "Checking for optional continuous queries: $EXTERNALCQS"
+	if [ -f "$EXTERNALCQS" ] ; then
 
+		# yes! tell influx to load the file at the internal path)
+		echo "   Telling influx to reload continuous queries"
+		docker exec "$CONTAINER" influx -import -path "$INTERNALCQS"
+
+	fi
+	
 	# does the hook script exist?
-	echo "Checking for optional epilog: $EPILOG_PATH"
-	if [ -f "$EPILOG_PATH" ] ; then
+	echo "Checking for optional epilog: $EXTERNALEPILOG"
+	if [ -f "$EXTERNALEPILOG" ] ; then
 
 		# yes! copy hook script into the container at the working directory
 		echo "   Epilog found - copying into container"
-		docker cp "$EPILOG_PATH" "$CONTAINER:$EPILOG_NAME"
+		docker cp "$EXTERNALEPILOG" "$CONTAINER:$INTERNALEPILOG"
 
 		# tell influx to process the hook script (also in the working dir)
-		echo "   Telling influxd to process epilog"
-		docker exec "$CONTAINER" influx -import -path "$EPILOG_NAME"
+		echo "   Telling influx to process epilog"
+		docker exec "$CONTAINER" influx -import -path "$INTERNALEPILOG"
 
 		# the hook script vanishes the next time the container is
 		# recreated so there is no need to clean up.

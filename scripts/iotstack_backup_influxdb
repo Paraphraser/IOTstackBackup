@@ -56,10 +56,19 @@ fi
 
 # assumptions
 COMPOSENAME="docker-compose.yml"
+CQSNAME="continuous-queries.influxql"
+EPILOGNAME="iotstack_restore_$CONTAINER.epilog"
+
 COMPOSE="$IOTSTACK/$COMPOSENAME"
 BACKUPS="$IOTSTACK/backups"
-INFLUXBACKUP="$BACKUPS/$CONTAINER"
-INFLUXBACKUPDB="$INFLUXBACKUP/db"
+EXTERNALEPILOG="$IOTSTACK/services/$CONTAINER/$EPILOGNAME"
+INTERNALEPILOG="/$(uuidgen).epilog"
+EXTERNALBACKUP="$BACKUPS/$CONTAINER"
+EXTERNALBACKUPDB="$EXTERNALBACKUP/db"
+INTERNALBACKUPDB="/var/lib/influxdb/backup"
+INFLUXDATA="$IOTSTACK/volumes/$CONTAINER/data"
+EXTERNALCQS="$EXTERNALBACKUPDB/$CQSNAME"
+INTERNALCQS="$INTERNALBACKUPDB/$CQSNAME"
 
 # is influxdb running?
 if ! isContainerRunning "$CONTAINER" ; then
@@ -73,9 +82,9 @@ fi
 [ $(stat -c "%a" "$BACKUPS") = "755" ] || sudo chmod 755 "$BACKUPS"
 
 # make sure the influx backup directory exists & has correct ownership & mode
-[ -d "$INFLUXBACKUPDB" ] || sudo mkdir -m 755 -p "$INFLUXBACKUPDB"
-[ $(stat -c "%U:%G" "$INFLUXBACKUP") = "root:root" ] || sudo chown -R root:root "$INFLUXBACKUP"
-[ $(stat -c "%a" "$INFLUXBACKUP") = "755" ] || sudo chmod -R 755 "$INFLUXBACKUP"
+[ -d "$EXTERNALBACKUPDB" ] || sudo mkdir -m 755 -p "$EXTERNALBACKUPDB"
+[ $(stat -c "%U:%G" "$EXTERNALBACKUP") = "root:root" ] || sudo chown -R root:root "$EXTERNALBACKUP"
+[ $(stat -c "%a" "$EXTERNALBACKUP") = "755" ] || sudo chmod -R 755 "$EXTERNALBACKUP"
 
 # now we can begin
 echo "----- Starting $SCRIPT at $(date) -----"
@@ -84,21 +93,32 @@ echo "----- Starting $SCRIPT at $(date) -----"
 touch "$BACKUP_TAR"
 
 # the influx backup directory needs to be empty
-if [ $(ls -1 "$INFLUXBACKUPDB" | wc -l) -gt 0 ] ; then
-   echo "Erasing $INFLUXBACKUPDB"
-   sudo rm "$INFLUXBACKUPDB"/*
+if [ $(ls -1 "$EXTERNALBACKUPDB" | wc -l) -gt 0 ] ; then
+   echo "Erasing $EXTERNALBACKUPDB"
+   sudo rm "$EXTERNALBACKUPDB"/*
 fi
 
 # tell influx to perform the backup
 echo "Telling influxd to create a portable backup"
-docker exec "$CONTAINER" influxd backup -portable /var/lib/influxdb/backup
+docker exec "$CONTAINER" influxd backup -portable "$INTERNALBACKUPDB"
+
+# attempt to collect any continuous queries
+echo "Extracting any continuous queries"
+docker exec influxdb bash -c \
+	"influx -execute 'SHOW CONTINUOUS QUERIES' \
+	| grep 'CREATE CONTINUOUS QUERY' \
+	| sed 's/^.*CREATE CONTINUOUS QUERY/CREATE CONTINUOUS QUERY/g' \
+	>$INTERNALCQS"
+
+# remove if an empty file was created (ie no continuous queries)
+[ -f "$EXTERNALCQS" -a ! -s "$EXTERNALCQS" ] && sudo rm "$EXTERNALCQS"
 
 # sweep the backup into a tar (sudo is needed because backup files are
 # created with owner root, group root, mode 600)
 echo "Collecting the backup files into a tar"
 sudo tar \
 	-cf "$BACKUP_TAR" \
-	-C "$INFLUXBACKUPDB" \
+	-C "$EXTERNALBACKUPDB" \
 	.
 
 # report size of archive
