@@ -1060,6 +1060,18 @@ $ iotstack_restore «runtag» {«by_host_dir»}
 	$ iotstack_restore 2022-05-24_1138.iot-hub
 	```
 
+	Tip:
+	
+	* If you have any difficulty working out the «runtag» that was used by the `iotstack_backup` run you were trying to are trying to restore, look at the start of the log file (`.txt` extension), like this:
+
+	``` console
+	$ head -2 2024-11-30_1005.sec-dev.backup-log.txt
+	----- Starting iotstack_backup at Sat 30 Nov 2024 10:05:03 AM AEDT -----
+	       RUNTAG = 2024-11-30_1005.sec-dev
+	```
+	
+	> Writing the «runtag» to the log was implemented on 2024-11-30. If you don't see the «runtag» in your log files, try doing [periodic maintenance](#periodicMaintenance).
+
 * «by\_host\_dir» is an _optional_ argument. If omitted, the script assumes that «runtag» matches the syntax defined at [about «runtag»](#aboutRuntag) and treats all characters to the right of the first period as the «by\_host\_dir». For example, given the «runtag»:
 
 	```

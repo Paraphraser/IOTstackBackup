@@ -128,10 +128,12 @@ exec >> "$LOGFILE"
 exec 2>> "$LOGFILE"
 
 echo "----- Starting $SCRIPT at $(date) -----"
+echo "       RUNTAG = $RUNTAG"
 echo " CLOUD_METHOD = $CLOUD_METHOD"
 echo "CLOUD_OPTIONS = $CLOUD_OPTIONS"
 echo " CLOUD_PREFIX = $CLOUD_PREFIX"
 echo "   CLOUD_PATH = $CLOUD_PATH"
+echo ""
 
 # record images in use (ukkopahis suggestion on Discord)
 docker image ls --all --digests --no-trunc
