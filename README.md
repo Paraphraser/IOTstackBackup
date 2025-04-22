@@ -959,24 +959,26 @@ Providing only that it can identify a viable IOTstack installation, this script 
 		- `domoticz.db-wal` (SQLite write-ahead log)
 		- `domoticz.db-shm` (index to the write-ahead log)
 
+	* `esphome/config/.esphome` <sup>1</sup>
 	* `influxdb`
 	* `influxdb2`
 	* `mariadb`
 	* `mosquitto/data`
-	* `motioneye/var_lib_motioneye` <sup>1</sup>
+	* `motioneye/var_lib_motioneye` <sup>2</sup>
 	* `nextcloud`
 	* `postgres`
 	* `wordpress`
 	* `pihole.restored`
-	* `subversion`  <sup>2</sup>
-	* `zigbee2mqtt/data/log` <sup>3</sup>
+	* `subversion`  <sup>3</sup>
+	* `zigbee2mqtt/data/log` <sup>4</sup>
 	* `lost+found`
 
 	Notes:
 	
-	1. where videos are stored. Depending on things like frame rate, the ±time around a trigger you wish to preserve, and the numbers of days you wish to preserve, this folder can be **massive** so it is omitted by default. If you wish to include old videos in your backups, just remove the exclusion from the script.
-	2. omitted because the container is not copy-safe but, as yet, there is no container-specific backup script. If you run either container and want to take the risk, just remove the exclusion from the script.
-	3. the way Zigbee2MQTT maintains its logs is not amenable to *restoration* so there is little point including the logs in backups.
+	1. where build artifacts are stored. This folder can be **massive** but the ESPHome container will recreate it on demand.
+	2. where videos are stored. Depending on things like frame rate, the ±time around a trigger you wish to preserve, and the numbers of days you wish to preserve, this folder can be **massive** so it is omitted by default. If you wish to include old videos in your backups, just remove the exclusion from the script.
+	3. omitted because the container is not copy-safe but, as yet, there is no container-specific backup script. If you run either container and want to take the risk, just remove the exclusion from the script.
+	4. the way Zigbee2MQTT maintains its logs is not amenable to *restoration* so there is little point including the logs in backups.
 
 <a name="iotstackBackupContainer"></a>
 ### iotstack\_backup\_*«container»*
