@@ -27,6 +27,15 @@ isContainerRunning() {
    return 1
 }
 
+preferredCommand() {
+   if [ -n "$(docker exec "$CONTAINER_DB" which "$1")" ] ; then
+      echo "$1"
+   else
+      echo "$2"
+   fi
+}
+
+
 # $1 is required and is either path to a .tar.gz or the path to a folder
 # $2 is optional and is the runtag (yyyy-mm-dd_hhmm.host-name)
 # $3 is optional and overrides the default file name
@@ -61,7 +70,9 @@ COMPOSENAME="docker-compose.yml"
 COMPOSE="$IOTSTACK/$COMPOSENAME"
 VOLUMES="$IOTSTACK/volumes"
 WORDPRESS_VOLUMES="$VOLUMES/$CONTAINER"
-WORDPRESS_DB_BACKUP="$WORDPRESS_VOLUMES/db_backup"
+WORDPRESS_DIR="html"
+WORDPRESS_DB_DIR="db_backup"
+WORDPRESS_DB_BACKUP="$WORDPRESS_VOLUMES/$WORDPRESS_DB_DIR"
 
 # check that containers are running
 if ! isContainerRunning "$CONTAINER" || ! isContainerRunning "$CONTAINER_DB" ; then
@@ -91,8 +102,8 @@ BACKUP_INCLUDE="$(mktemp -p /dev/shm/)"
 
 # define the folders to be included in the backup.
 cat <<-INCLUSIONS >"$BACKUP_INCLUDE"
-./db_backup
-./html
+./$WORDPRESS_DB_DIR
+./$WORDPRESS_DIR
 INCLUSIONS
 
 # check that the items to be included exist
@@ -109,7 +120,7 @@ done
 
 # tell MariaDB to take a backup
 echo "Telling $CONTAINER_DB (MariaDB) to create a portable backup"
-docker exec "$CONTAINER_DB" bash -c 'mysqldump --single-transaction -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE >/backup/backup.sql'
+docker exec "$CONTAINER_DB" bash -c "$(preferredCommand mariadb-dump mysqldump) --single-transaction -p\$MYSQL_ROOT_PASSWORD \$MYSQL_DATABASE >/backup/backup.sql"
 
 # perform the backup (relative to ~/IOTstack/volumes/wordpress)
 echo "Collecting the backup files into a tar.gz"

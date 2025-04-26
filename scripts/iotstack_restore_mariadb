@@ -24,6 +24,15 @@ isContainerRunning() {
    return 1
 }
 
+preferredCommand() {
+   if [ -n "$(docker exec "$CONTAINER_DB" which "$1")" ] ; then
+      echo "$1"
+   else
+      echo "$2"
+   fi
+}
+
+
 # $1 is required and is either path to a .tar.gz or the path to a folder
 # $2 is optional and is the runtag (yyyy-mm-dd_hhmm.host-name)
 # $3 is optional and overrides the default file name
@@ -112,9 +121,14 @@ if [ $(ls -1 "$RESTOREDIR" | wc -l) -gt 0 ] ; then
       sleep 1
    done
 
+   # try to ensure the container has a root password
+   echo "checking whether $CONTAINER has a root password (ignore any errors)"
+   echo "(refer https://github.com/linuxserver/docker-mariadb/issues/163)"
+   docker exec "$CONTAINER" bash -c "$(preferredCommand mariadb-admin mysqladmin) -u root password \$MYSQL_ROOT_PASSWORD"
+
    # perform the restore
    echo "telling $CONTAINER to restore from backup"
-   docker exec "$CONTAINER" bash -c 'mysql -p${MYSQL_ROOT_PASSWORD} ${MYSQL_DATABASE} </backup/backup.sql'
+   docker exec "$CONTAINER" bash -c "$(preferredCommand mariadb mysql) -p\${MYSQL_ROOT_PASSWORD} \${MYSQL_DATABASE} </backup/backup.sql"
 
    # take down the service
    echo "deactivating $CONTAINER"

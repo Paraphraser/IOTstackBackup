@@ -27,6 +27,15 @@ isContainerRunning() {
    return 1
 }
 
+preferredCommand() {
+   if [ -n "$(docker exec "$CONTAINER_DB" which "$1")" ] ; then
+      echo "$1"
+   else
+      echo "$2"
+   fi
+}
+
+
 # $1 is required and is either path to a .tar.gz or the path to a folder
 # $2 is optional and is the runtag (yyyy-mm-dd_hhmm.host-name)
 # $3 is optional and overrides the default file name
@@ -116,7 +125,7 @@ docker exec -u www-data -it "$CONTAINER" php occ maintenance:mode --on
 
 # tell MariaDB to take a backup
 echo "Telling $CONTAINER_DB (MariaDB) to create a portable backup"
-docker exec "$CONTAINER_DB" bash -c 'mysqldump --single-transaction -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE >/backup/backup.sql'
+docker exec "$CONTAINER_DB" bash -c "$(preferredCommand mariadb-dump mysqldump) --single-transaction -p\$MYSQL_ROOT_PASSWORD \$MYSQL_DATABASE >/backup/backup.sql"
 
 # perform the backup (relative to ~/IOTstack/volumes/nextcloud)
 echo "Collecting the backup files into a tar.gz"

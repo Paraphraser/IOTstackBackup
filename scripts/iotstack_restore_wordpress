@@ -27,6 +27,15 @@ isContainerRunning() {
    return 1
 }
 
+preferredCommand() {
+   if [ -n "$(docker exec "$CONTAINER_DB" which "$1")" ] ; then
+      echo "$1"
+   else
+      echo "$2"
+   fi
+}
+
+
 # $1 is required and is either path to a .tar.gz or the path to a folder
 # $2 is optional and is the runtag (yyyy-mm-dd_hhmm.host-name)
 # $3 is optional and overrides the default file name
@@ -61,8 +70,8 @@ COMPOSENAME="docker-compose.yml"
 COMPOSE="$IOTSTACK/$COMPOSENAME"
 VOLUMES="$IOTSTACK/volumes"
 WORDPRESS_VOLUMES="$VOLUMES/$CONTAINER"
-WORDPRESS_DB_BACKUP_NAME="db_backup"
-WORDPRESS_HTML_NAME="html"
+WORDPRESS_DB_DIR="db_backup"
+WORDPRESS_DIR="html"
 
 # check the key assumptions
 if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
@@ -91,7 +100,7 @@ echo "unpacking $RESTORE_TAR_GZ"
 sudo tar -x --same-owner -z -f "$RESTORE_TAR_GZ" -C "$RESTOREDIR"
 
 # check expected folders are present in restore
-for SPATH in "$WORDPRESS_HTML_NAME" "$WORDPRESS_DB_BACKUP_NAME" ; do
+for SPATH in "$WORDPRESS_DIR" "$WORDPRESS_DB_DIR" ; do
    if ! [ -d "$RESTOREDIR/$SPATH" ] ; then
       echo "Error: $SPATH not found in backup"
       echo "This may indicate $RESTORE_TAR_GZ is malformed."
@@ -157,9 +166,14 @@ done
 # extra stabilisation time - prophylactic
 sleep 3
 
+# try to ensure the container has a root password
+echo "checking whether $CONTAINER_DB has a root password (ignore any errors)"
+echo "(refer https://github.com/linuxserver/docker-mariadb/issues/163)"
+docker exec "$CONTAINER_DB" bash -c "$(preferredCommand mariadb-admin mysqladmin) -u root password \$MYSQL_ROOT_PASSWORD"
+
 # tell wordpress_db to perform the restore
 echo "telling $CONTAINER_DB to restore a portable backup"
-docker exec "$CONTAINER_DB" bash -c 'mysql -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE </backup/backup.sql'
+docker exec "$CONTAINER_DB" bash -c "$(preferredCommand mariadb mysql) -p\$MYSQL_ROOT_PASSWORD \$MYSQL_DATABASE </backup/backup.sql"
 
 # extra stabilisation time - prophylactic
 sleep 3
