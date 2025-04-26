@@ -146,6 +146,7 @@ iotstack_backup_nextcloud "$BACKUPSDIR" "$RUNTAG"
 iotstack_backup_mariadb "$BACKUPSDIR" "$RUNTAG"
 iotstack_backup_postgres "$BACKUPSDIR" "$RUNTAG"
 iotstack_backup_wordpress "$BACKUPSDIR" "$RUNTAG"
+iotstack_backup_gitea "$BACKUPSDIR" "$RUNTAG"
 
 # copy the files (keep in mind that log entries written after the
 # log is copied to the remote will only be in the local log).

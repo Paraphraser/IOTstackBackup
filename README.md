@@ -28,23 +28,35 @@ These scripts will never be *guaranteed* to cover the full gamut of container ty
 
 non-copy-safe container  | supported
 -------------------------|:---------:
+Gitea (with MariaDB)     | yes <sup>1</sup>
 InfluxDB 1.8             | yes
 InfluxDB 2               | yes
 MariaDB                  | yes
 Nextcloud + Nextcloud_DB | yes
-Postgres                 | yes <sup>1</sup>
+Postgres                 | yes <sup>2</sup>
 Subversion               | no
-WordPress                | yes <sup>2</sup>
+WordPress                | yes <sup>3</sup>
 
 Notes:
 
-1. 2023-Feb-08 depends on:
+1. 2025-Apr-26. This is slightly tricky. The version of Gitea which has been part of IOTstack since September 2020 used the `kunde21/gitea-arm`. That image has not been maintained for the past three years. This older container is copy-safe and has been included in the general backup.
+
+	The following PRs are intended to bring Gitea up-to-date:
+
+	* [PR796](https://github.com/SensorsIot/IOTstack/pull/796) update to MariaDB health-checking script; and
+	* [PR798](https://github.com/SensorsIot/IOTstack/pull/798) update to Gitea service definition.
+
+	The service definition included in PR798 delegates storage management to an instance of MariaDB, which means the Gitea service is no longer copy-safe. IOTstackBackup now implements a dedicated pair of backup and restore scripts which will handle both the original and updated service definitions.
+	
+	The **problem** is that there is no way of automate the migration of the older persistent store to the new format. It's unfortunate but all decisions about whether to migrate, when to migrate and how to migrate need to be left up to the individual. 
+
+2. 2023-Feb-08 depends on:
 
 	* [PR661](https://github.com/SensorsIot/IOTstack/pull/661) and [PR662](https://github.com/SensorsIot/IOTstack/pull/662) being merged into IOTstack (which was done on 2023-03-02); **and**
 	* You updating your local copy of IOTstack (eg `git pull`); **and**
 	* Adoption of the updated service definition for Postgres in your compose file.
 
-2. 2024-Mar-30 depends on [PR759](https://github.com/SensorsIot/IOTstack/pull/759) and [PR760](https://github.com/SensorsIot/IOTstack/pull/760) being merged into IOTstack.
+3. 2024-Mar-30 depends on [PR759](https://github.com/SensorsIot/IOTstack/pull/759) and [PR760](https://github.com/SensorsIot/IOTstack/pull/760) being merged into IOTstack.
 
 ## Contents
 
@@ -824,6 +836,7 @@ Each extension implies the file's internal format. Violating this convention lea
 «script»                    | «defaultFileName»
 :--------------------------:|:------------------------:
 `iotstack_backup_general`   | `general-backup.tar.gz `
+`iotstack_backup_gitea`     | `gitea-backup.tar.gz`
 `iotstack_backup_influxdb`  | `influx-backup.tar` <sup>†</sup>
 `iotstack_backup_influxdb2` | `influxdb2-backup.tar`
 `iotstack_backup_mariadb`   | `mariadb-backup.tar.gz`
@@ -839,6 +852,7 @@ Each extension implies the file's internal format. Violating this convention lea
 «script»                    | associated container(s)
 :--------------------------:|:------------------------:
 `iotstack_backup_influxdb`  | `influxdb`
+`iotstack_backup_gitea`     | `gitea` + `gitea_db`
 `iotstack_backup_influxdb2` | `influxdb2`
 `iotstack_backup_mariadb`   | `mariadb`
 `iotstack_backup_nextcloud` | `nextcloud` + `nextcloud_db`
@@ -876,6 +890,7 @@ In general, you should run `iotstack_backup` without parameters. If you decide t
 The script invokes:
 
 * [`iotstack_backup_general`](#iotstackBackupGeneral)
+* [`iotstack_backup_gitea`](#iotstackBackupContainer)
 * [`iotstack_backup_influxdb`](#iotstackBackupContainer)
 * [`iotstack_backup_influxdb2`](#iotstackBackupContainer)
 * [`iotstack_backup_nextcloud`](#iotstackBackupContainer)
@@ -960,6 +975,7 @@ Providing only that it can identify a viable IOTstack installation, this script 
 		- `domoticz.db-shm` (index to the write-ahead log)
 
 	* `esphome/config/.esphome` <sup>1</sup>
+	* `gitea`
 	* `influxdb`
 	* `influxdb2`
 	* `mariadb`
@@ -1094,6 +1110,7 @@ The script:
 * Uses your chosen method to copy files matching the pattern `«runtag».*` into the temporary directory
 * Deactivates your stack (if at least one container is running)
 * Invokes [`iotstack_restore_general`](#iotstackRestoreGeneral)
+* Invokes [`iotstack_restore_gitea`](#iotstackRestoreContainer)
 * Invokes [`iotstack_restore_influxdb`](#iotstackRestoreContainer)
 * Invokes [`iotstack_restore_influxdb2`](#iotstackRestoreContainer)
 * Invokes [`iotstack_restore_nextcloud`](#iotstackRestoreContainer)

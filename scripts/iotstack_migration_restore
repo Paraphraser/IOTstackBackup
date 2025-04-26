@@ -64,5 +64,6 @@ iotstack_restore_nextcloud "$PWD" "$RUNTAG"
 iotstack_restore_mariadb "$PWD" "$RUNTAG"
 iotstack_restore_postgres "$PWD" "$RUNTAG"
 iotstack_restore_wordpress "$PWD" "$RUNTAG"
+iotstack_restore_gitea "$PWD" "$RUNTAG"
 
 echo "----- Finished $SCRIPT at $(date) -----"

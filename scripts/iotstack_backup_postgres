@@ -105,7 +105,7 @@ fi
 echo "Telling $CONTAINER to create a backup"
 docker exec "$CONTAINER" bash -c 'pg_dumpall -U $POSTGRES_USER | gzip > /backup/postgres_backup.sql.gz'
 
-# perform the backup (relative to ~/IOTstack/volumes/mariadb)
+# perform the backup (relative to ~/IOTstack/volumes/postgres)
 echo "Collecting the backup file (a .gz) into a .tar"
 sudo tar \
   -czf "$BACKUP_SQL_GZ_TAR" \

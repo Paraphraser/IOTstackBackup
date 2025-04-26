@@ -89,6 +89,7 @@ cat <<-EXCLUSIONS >"$BACKUP_EXCLUDE"
 ./volumes/domoticz/domoticz.db-shm
 ./volumes/domoticz/domoticz.db-wal
 ./volumes/esphome/config/.esphome
+./volumes/gitea
 ./volumes/influxdb
 ./volumes/influxdb2
 ./volumes/mariadb

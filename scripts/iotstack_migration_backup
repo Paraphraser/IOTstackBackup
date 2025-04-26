@@ -65,5 +65,6 @@ iotstack_backup_nextcloud "$PWD" "$RUNTAG"
 iotstack_backup_mariadb "$PWD" "$RUNTAG"
 iotstack_backup_postgres "$PWD" "$RUNTAG"
 iotstack_backup_wordpress "$PWD" "$RUNTAG"
+iotstack_backup_gitea "$PWD" "$RUNTAG"
 
 echo "----- Finished $SCRIPT at $(date) -----"

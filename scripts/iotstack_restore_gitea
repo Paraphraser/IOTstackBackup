@@ -1,0 +1,196 @@
+#!/usr/bin/env bash
+
+# support user renaming of script
+SCRIPT=$(basename "$0")
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "$SCRIPT should NOT be run using sudo" && exit 1
+
+# assumptions that can be overridden
+IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
+CONTAINER="${CONTAINER:-"gitea"}"
+DEFAULTFILENAME=${DEFAULTFILENAME:-"$CONTAINER-backup.tar.gz"}
+
+# the project name is the all-lower-case form of the folder name
+PROJECT=$(basename ${IOTSTACK,,})
+
+# the database container is
+CONTAINER_DB="${CONTAINER}_db"
+
+# useful function
+isContainerRunning() {
+	if STATUS=$(curl -s --unix-socket /var/run/docker.sock http://localhost/containers/$1/json | jq .State.Status) ; then
+		if [ "$STATUS" = "\"running\"" ] ; then
+			return 0
+		fi
+	fi
+	return 1
+}
+
+preferredCommand() {
+	if [ -n "$(docker exec "$CONTAINER_DB" which "$1")" ] ; then
+		echo "$1"
+	else
+		echo "$2"
+	fi
+}
+
+
+# $1 is required and is either path to a .tar.gz or the path to a folder
+# $2 is optional and is the runtag (yyyy-mm-dd_hhmm.host-name)
+# $3 is optional and overrides the default file name
+
+case "$#" in
+
+	1)
+		RESTORE_TAR_GZ=$(realpath "$1")
+	;;
+
+	2 | 3)
+		RESTORE_TAR_GZ=$(realpath "$1/$2.${3:-"$DEFAULTFILENAME"}")
+	;;
+
+	*)
+		echo "Usage 1: $SCRIPT path/to/$DEFAULTFILENAME"
+		echo "Usage 2: $SCRIPT path/to/backupdir runtag {override}"
+		echo "         (override defaults to $DEFAULTFILENAME)"
+		exit 1
+	;;
+
+esac
+
+# it is an error if the restore tar does not exist
+if [ ! -e "$RESTORE_TAR_GZ" ] ; then
+	echo "Warning: $RESTORE_TAR_GZ does not exist - skipped"
+	exit 0
+fi
+
+# assumptions
+COMPOSENAME="docker-compose.yml"
+COMPOSE="$IOTSTACK/$COMPOSENAME"
+VOLUMES="$IOTSTACK/volumes"
+GITEA_VOLUMES="$VOLUMES/$CONTAINER"
+GITEA_DIR="data"
+GITEA_DB_DIR="db_backup"
+GITEA_DB_BACKUP="$GITEA_VOLUMES/$GITEA_DB_DIR"
+
+# check the key assumptions
+if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
+	echo "Error: One of the following does not exist:"
+	echo "   $IOTSTACK"
+	echo "   $COMPOSE"
+	echo "This may indicate a problem with your installation."
+	exit 1
+fi
+
+# check that containers are not running
+for C in "$CONTAINER" "$CONTAINER_DB" ; do
+	if isContainerRunning "$C" ; then
+		echo "Warning: $CONTAINER should not be running at the start of a restore."
+		echo "         Please deactivate and try again."
+		exit 0
+	fi
+done
+
+# now we can begin
+echo "----- Starting $SCRIPT at $(date) -----"
+
+# make a temporary directory to unpack into
+RESTOREDIR=$(mktemp -d -p "$IOTSTACK")
+
+# unpack the general backup into the temporary directory
+echo "unpacking $RESTORE_TAR_GZ"
+sudo tar -x --same-owner -z -f "$RESTORE_TAR_GZ" -C "$RESTOREDIR"
+
+# check that the data directory is available (database is optional)
+if ! [ -d "$RESTOREDIR/$GITEA_DIR" ] ; then
+	echo "Error: $GITEA_DIR not found in backup"
+	echo "This may indicate $RESTORE_TAR_GZ is malformed."
+	exit 1
+fi
+
+# does the top-level folder of the persistent store exist?
+if [ -d "$GITEA_VOLUMES" ] ; then
+	echo "erasing contents of $GITEA_VOLUMES"
+	sudo rm -rf "$GITEA_VOLUMES"/*
+else
+	echo "creating empty $GITEA_VOLUMES"
+	sudo mkdir -p "$GITEA_VOLUMES"
+fi
+
+echo "moving restored artifacts into place"
+sudo mv "$RESTOREDIR/"* "$GITEA_VOLUMES/"
+
+echo "cleaning up intermediate files"
+sudo rm -rf "$RESTOREDIR"
+
+# did the restore make the database backup available?
+if [ -d "$GITEA_DB_BACKUP" ] ; then
+
+	# yes! bring up the wordpress_db container (done early to give time to start)
+	echo "activating $CONTAINER_DB (temporarily)"
+	docker-compose -f "$COMPOSE" up -d "$CONTAINER_DB"
+
+	# stabilisation time - prophylactic
+	sleep 3
+
+	# wait for mariadb (gitea_db) to be ready for business
+	echo "waiting for $CONTAINER_DB to start"
+	RETRIES=30
+	while : ; do
+
+		# see if wordpress_db reports itself ready for business
+		docker exec "$CONTAINER_DB" iotstack_healthcheck.sh >/dev/null 2>&1
+
+		# is the container ready?
+		if [ $? -ne 0 ] ; then
+
+			# no! decrement the retry counter
+			let "RETRIES-=1"
+
+			# should we retry?
+			if [ $RETRIES -gt 0 ] ; then
+
+				# yes! wait, then retry
+				sleep 2 ; echo "  re-trying ($RETRIES) ..." ; continue
+
+			fi
+
+			# retries exhausted - declare failure
+			echo "$CONTAINER_DB did not come up properly - unable to reload database"
+			exit 1
+
+		fi
+
+		# healthcheck passed
+		break;
+
+	done
+
+	# extra stabilisation time - prophylactic
+	sleep 3
+
+	# try to ensure the container has a root password
+	echo "checking whether $CONTAINER_DB has a root password (ignore any errors)"
+	echo "(refer https://github.com/linuxserver/docker-mariadb/issues/163)"
+	docker exec "$CONTAINER_DB" bash -c "$(preferredCommand mariadb-admin mysqladmin) -u root password \$MYSQL_ROOT_PASSWORD"
+	
+	# tell gitea_db to perform the restore
+	echo "telling $CONTAINER_DB to restore a portable backup"
+	docker exec "$CONTAINER_DB" bash -c "$(preferredCommand mariadb mysql) -p\$MYSQL_ROOT_PASSWORD \$MYSQL_DATABASE </backup/backup.sql"
+
+	# extra stabilisation time - prophylactic
+	sleep 3
+
+	# take down the database again
+	echo "deactivating $CONTAINER_DB"
+	docker-compose -f "$COMPOSE" rm --force --stop -v "$CONTAINER_DB"
+
+else
+
+	# no! assume legacy gitea
+	echo "Warning: $GITEA_DB_DIR not present in restore - assuming legacy $CONTAINER"
+
+fi
+
+echo "----- Finished $SCRIPT at $(date) -----"

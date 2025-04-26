@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+
+# support user renaming of script
+SCRIPT=$(basename "$0")
+
+# should not run as root
+[ "$EUID" -eq 0 ] && echo "$SCRIPT should NOT be run using sudo" && exit 1
+
+# assumptions that can be overridden
+IOTSTACK=${IOTSTACK:-"$HOME/IOTstack"}
+CONTAINER="${CONTAINER:-"gitea"}"
+DEFAULTFILENAME=${DEFAULTFILENAME:-"$CONTAINER-backup.tar.gz"}
+
+# the project name is the all-lower-case form of the folder name
+PROJECT=$(basename ${IOTSTACK,,})
+
+# the database container is
+CONTAINER_DB="${CONTAINER}_db"
+
+# useful function
+isContainerRunning() {
+   if STATUS=$(curl -s --unix-socket /var/run/docker.sock http://localhost/containers/$1/json | jq .State.Status) ; then
+      if [ "$STATUS" = "\"running\"" ] ; then
+         return 0
+      fi
+   fi
+   return 1
+}
+
+preferredCommand() {
+   if [ -n "$(docker exec "$CONTAINER_DB" which "$1")" ] ; then
+      echo "$1"
+   else
+      echo "$2"
+   fi
+}
+
+
+# $1 is required and is either path to a .tar.gz or the path to a folder
+# $2 is optional and is the runtag (yyyy-mm-dd_hhmm.host-name)
+# $3 is optional and overrides the default file name
+
+case "$#" in
+
+  1)
+    BACKUP_TAR_GZ=$(realpath "$1")
+    ;;
+
+  2 | 3)
+    BACKUP_TAR_GZ=$(realpath "$1/$2.${3:-"$DEFAULTFILENAME"}")
+    ;;
+
+  *)
+    echo "Usage 1: $SCRIPT path/to/$DEFAULTFILENAME"
+    echo "Usage 2: $SCRIPT path/to/backupdir runtag {override}"
+    echo "         (override defaults to $DEFAULTFILENAME)"
+    exit 1
+    ;;
+
+esac
+
+# fail safe if the file already exists - no accidental overwrites
+if [ -e "$BACKUP_TAR_GZ" ] ; then
+   echo "Error: $BACKUP_TAR_GZ already exists - will not be overwritten"
+   exit 1
+fi
+
+# assumptions
+COMPOSENAME="docker-compose.yml"
+COMPOSE="$IOTSTACK/$COMPOSENAME"
+VOLUMES="$IOTSTACK/volumes"
+GITEA_VOLUMES="$VOLUMES/$CONTAINER"
+GITEA_DIR="data"
+GITEA_DB_DIR="db_backup"
+GITEA_DB_BACKUP="$GITEA_VOLUMES/$GITEA_DB_DIR"
+
+# check that the primary container is running
+if ! isContainerRunning "$CONTAINER"; then
+   echo "Warning: $CONTAINER not running - backup skipped"
+   exit 0
+fi
+
+# now we can begin
+echo "----- Starting $SCRIPT at $(date) -----"
+
+# create a file to hold the list of inclusions
+BACKUP_INCLUDE="$(mktemp -p /dev/shm/)"
+
+# initialise the set of folders to be included in the backup.
+#   
+cat <<-INCLUSIONS >"$BACKUP_INCLUDE"
+./$GITEA_DIR
+INCLUSIONS
+
+# is the database engine running? The up-to-date gitea container depends
+# on gitea_db so the only situation where the database should NOT be
+# running is if the gitea instance is the legacy container
+if isContainerRunning "$CONTAINER_DB" ; then
+
+   # yes! ensure the db_backup backup directory exists & has correct
+   # ownership & mode
+   [ -d "$GITEA_DB_BACKUP" ] || sudo mkdir -m 755 -p "$GITEA_DB_BACKUP"
+   [ $(stat -c "%U:%G" "$GITEA_DB_BACKUP") = "$USER:$USER" ] || sudo chown -R $USER:$USER "$GITEA_DB_BACKUP"
+   [ $(stat -c "%a" "$GITEA_DB_BACKUP") = "755" ] || sudo chmod -R 755 "$GITEA_DB_BACKUP"
+   
+   # append to the list of inclusions
+   echo "./$GITEA_DB_DIR" >>"$BACKUP_INCLUDE"
+
+   # the db_backup backup directory needs to be empty
+   if [ $(ls -1 "$GITEA_DB_BACKUP" | wc -l) -gt 0 ] ; then
+      echo "Erasing $GITEA_DB_BACKUP"
+      sudo rm "$GITEA_DB_BACKUP"/*
+   fi
+
+   # tell MariaDB to take a backup
+   echo "Telling $CONTAINER_DB (MariaDB) to create a portable backup"
+   docker exec "$CONTAINER_DB" bash -c "$(preferredCommand mariadb-dump mysqldump) --single-transaction -p\$MYSQL_ROOT_PASSWORD \$MYSQL_DATABASE >/backup/backup.sql"
+
+else
+   echo "Warning: $CONTAINER_DB not running - assuming legacy $CONTAINER"
+fi
+
+
+# check that the items to be included exist
+echo "Paths included in the backup:"
+for INCLUDE in $(cat $BACKUP_INCLUDE); do
+   I=$(realpath "$GITEA_VOLUMES/$INCLUDE")
+   if [ -d "$I" ]; then
+      echo " $I"
+   else
+      echo "Error: $I does not exist. This may indicate a problem with your installation - backup skipped."
+      exit 1
+   fi
+done
+
+# create the file (sets ownership)
+touch "$BACKUP_TAR_GZ"
+
+# perform the backup (relative to ~/IOTstack/volumes/wordpress)
+echo "Collecting the backup files into a tar.gz"
+sudo tar \
+  -czf "$BACKUP_TAR_GZ" \
+  -C "$GITEA_VOLUMES" \
+  -T "$BACKUP_INCLUDE"
+
+# report size of archive
+du -h "$BACKUP_TAR_GZ"
+
+echo "----- Finished $SCRIPT at $(date) -----"

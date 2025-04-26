@@ -162,6 +162,7 @@ iotstack_restore_nextcloud "$RESTOREDIR" "$RUNTAG"
 iotstack_restore_mariadb "$RESTOREDIR" "$RUNTAG"
 iotstack_restore_postgres "$RESTOREDIR" "$RUNTAG"
 iotstack_restore_wordpress "$RESTOREDIR" "$RUNTAG"
+iotstack_restore_gitea "$RESTOREDIR" "$RUNTAG"
 
 # clean up the temporary restore directory
 echo "Cleaning up"
