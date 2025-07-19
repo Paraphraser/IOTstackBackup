@@ -14,7 +14,10 @@ DEFAULTFILENAME=${DEFAULTFILENAME:-"$CONTAINER-backup.tar.gz"}
 # the project name is the all-lower-case form of the folder name
 PROJECT=$(basename ${IOTSTACK,,})
 
-# useful function
+# the database container is just the container
+CONTAINER_DB="${CONTAINER}"
+
+# useful functions
 isContainerRunning() {
    if STATUS=$(curl -s --unix-socket /var/run/docker.sock http://localhost/containers/$1/json | jq .State.Status) ; then
       if [ "$STATUS" = "\"running\"" ] ; then
@@ -30,6 +33,22 @@ preferredCommand() {
    else
       echo "$2"
    fi
+}
+
+shouldPassRootPassword() {
+
+   # see if the container defines the root password at the expected var
+   ROOT_PASSWORD=$(docker exec "$CONTAINER_DB" bash -c 'echo "${MYSQL_ROOT_PASSWORD}"')
+
+   # sense no password defined
+   [ -z "${ROOT_PASSWORD}" ] && return 1
+
+   # sense able to execute trivial command as root without a password
+   docker exec "$CONTAINER_DB" $(preferredCommand mariadb mysql) -u root -e 'quit' &> /dev/null && return 1
+
+   # implies password defined and required
+   return 0
+
 }
 
 
@@ -79,8 +98,8 @@ if ! [ -d "$IOTSTACK" -a -e "$COMPOSE" ] ; then
 fi
 
 # check that container is not running
-if isContainerRunning "$CONTAINER" ; then
-   echo "Warning: $CONTAINER should NOT be running at the start of a restore."
+if isContainerRunning "$CONTAINER_DB" ; then
+   echo "Warning: $CONTAINER_DB should NOT be running at the start of a restore."
    echo "         Please deactivate and try again."
    exit 1
 fi
@@ -112,27 +131,31 @@ if [ $(ls -1 "$RESTOREDIR" | wc -l) -gt 0 ] ; then
    mv "$RESTOREDIR"/* "$MARIADB_BACKUP"
 
    # bring up the container (initialises everything else)
-   echo "activating $CONTAINER (temporarily)"
-   docker-compose -f "$COMPOSE" up -d "$CONTAINER"
+   echo "activating $CONTAINER_DB (temporarily)"
+   docker-compose -f "$COMPOSE" up -d "$CONTAINER_DB"
 
    # wait for the container to be ready
-   while ! docker exec "$CONTAINER" iotstack_healthcheck.sh >/dev/null 2>&1 ; do
-      echo "waiting for $CONTAINER to become ready"
+   while ! docker exec "$CONTAINER_DB" iotstack_healthcheck.sh >/dev/null 2>&1 ; do
+      echo "waiting for $CONTAINER_DB to become ready"
       sleep 1
    done
 
-   # try to ensure the container has a root password
-   echo "checking whether $CONTAINER has a root password (ignore any errors)"
-   echo "(refer https://github.com/linuxserver/docker-mariadb/issues/163)"
-   docker exec "$CONTAINER" bash -c "$(preferredCommand mariadb-admin mysqladmin) -u root password \$MYSQL_ROOT_PASSWORD"
+   # figure out which command to invoke
+   COMMAND="$(preferredCommand mariadb mysql)"
+
+   # construct options
+   OPTIONS=""
+   if $(shouldPassRootPassword) ; then
+      OPTIONS="-p\$MYSQL_ROOT_PASSWORD"
+   fi
 
    # perform the restore
-   echo "telling $CONTAINER to restore from backup"
-   docker exec "$CONTAINER" bash -c "$(preferredCommand mariadb mysql) -p\${MYSQL_ROOT_PASSWORD} \${MYSQL_DATABASE} </backup/backup.sql"
+   echo "telling $CONTAINER_DB to restore from backup"
+   docker exec "$CONTAINER_DB" bash -c "$COMMAND $OPTIONS \${MYSQL_DATABASE} </backup/backup.sql"
 
    # take down the service
-   echo "deactivating $CONTAINER"
-   docker-compose -f "$COMPOSE" rm --force --stop -v "$CONTAINER"
+   echo "deactivating $CONTAINER_DB"
+   docker-compose -f "$COMPOSE" rm --force --stop -v "$CONTAINER_DB"
 
 else
    echo "$RESTOREDIR is empty - that would be the end of that"

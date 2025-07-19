@@ -17,7 +17,7 @@ PROJECT=$(basename ${IOTSTACK,,})
 # the database container is
 CONTAINER_DB="${CONTAINER}_db"
 
-# useful function
+# useful functions
 isContainerRunning() {
    if STATUS=$(curl -s --unix-socket /var/run/docker.sock http://localhost/containers/$1/json | jq .State.Status) ; then
       if [ "$STATUS" = "\"running\"" ] ; then
@@ -33,6 +33,22 @@ preferredCommand() {
    else
       echo "$2"
    fi
+}
+
+shouldPassRootPassword() {
+
+   # see if the container defines the root password at the expected var
+   ROOT_PASSWORD=$(docker exec "$CONTAINER_DB" bash -c 'echo "${MYSQL_ROOT_PASSWORD}"')
+
+   # sense no password defined
+   [ -z "${ROOT_PASSWORD}" ] && return 1
+
+   # sense able to execute trivial command as root without a password
+   docker exec "$CONTAINER_DB" $(preferredCommand mariadb mysql) -u root -e 'quit' &> /dev/null && return 1
+
+   # implies password defined and required
+   return 0
+
 }
 
 
@@ -112,9 +128,18 @@ if isContainerRunning "$CONTAINER_DB" ; then
       sudo rm "$GITEA_DB_BACKUP"/*
    fi
 
+   # figure out which command to invoke
+   COMMAND="$(preferredCommand mariadb-dump mysqldump)"
+
+   # construct options
+   OPTIONS="--single-transaction"
+   if $(shouldPassRootPassword) ; then
+      OPTIONS="$OPTIONS -p\$MYSQL_ROOT_PASSWORD"
+   fi
+
    # tell MariaDB to take a backup
    echo "Telling $CONTAINER_DB (MariaDB) to create a portable backup"
-   docker exec "$CONTAINER_DB" bash -c "$(preferredCommand mariadb-dump mysqldump) --single-transaction -p\$MYSQL_ROOT_PASSWORD \$MYSQL_DATABASE >/backup/backup.sql"
+   docker exec "$CONTAINER_DB" bash -c "$COMMAND $OPTIONS \$MYSQL_DATABASE >/backup/backup.sql"
 
 else
    echo "Warning: $CONTAINER_DB not running - assuming legacy $CONTAINER"
