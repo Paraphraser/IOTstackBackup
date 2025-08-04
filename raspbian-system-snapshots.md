@@ -561,7 +561,7 @@ The report may seem a bit "busy" at first but you will quickly realise that it i
 <a name="tipsSymlinks"></a>
 ### symlinks - known weakness
 
-When symlinks are encountered by `tar`, its default behaviour is to include the symlink "as is" rather than follow the link to the file system objects to which it points (dereferencing).
+When a symlink is encountered by `tar`, its default behaviour is to include the symlink "as is" rather than follow the link to the file system object to which it points (dereferencing).
 
 This behaviour can be overridden with the `-h` option but that appears to result in the snapshot failing to unpack without `sudo`. That's problematic because it implies an attempt to re-establish the "same" relationships on the recovery system. That is somewhere between *inappropriate* and *dangerous.*
 
