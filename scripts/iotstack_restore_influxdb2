@@ -91,7 +91,7 @@ sudo tar -x --same-owner -f "$RESTORE_TAR" -C "$INFLUXSTORE"
 
 # bring up the influxdb container (done early to give time to start)
 echo "activating $CONTAINER (temporarily)"
-docker-compose -f "$COMPOSE" up -d "$CONTAINER"
+docker compose --project-directory "$IOTSTACK" up -d "$CONTAINER"
 
 # wait for the container to be ready
 while ! docker exec "$CONTAINER" influx ping >/dev/null 2>&1 ; do
@@ -105,7 +105,7 @@ docker exec "$CONTAINER" influx restore /var/lib/backup --full
 
 # take down influxdb
 echo "deactivating $CONTAINER"
-docker-compose -f "$COMPOSE" rm --force --stop -v "$CONTAINER"
+docker compose --project-directory "$IOTSTACK" rm --force --stop -v "$CONTAINER"
 
 echo "----- Finished $SCRIPT at $(date) -----"
 

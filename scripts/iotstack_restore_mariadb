@@ -132,7 +132,7 @@ if [ $(ls -1 "$RESTOREDIR" | wc -l) -gt 0 ] ; then
 
    # bring up the container (initialises everything else)
    echo "activating $CONTAINER_DB (temporarily)"
-   docker-compose -f "$COMPOSE" up -d "$CONTAINER_DB"
+   docker compose --project-directory "$IOTSTACK" up -d "$CONTAINER_DB"
 
    # wait for the container to be ready
    while ! docker exec "$CONTAINER_DB" iotstack_healthcheck.sh >/dev/null 2>&1 ; do
@@ -155,7 +155,7 @@ if [ $(ls -1 "$RESTOREDIR" | wc -l) -gt 0 ] ; then
 
    # take down the service
    echo "deactivating $CONTAINER_DB"
-   docker-compose -f "$COMPOSE" rm --force --stop -v "$CONTAINER_DB"
+   docker compose --project-directory "$IOTSTACK" rm --force --stop -v "$CONTAINER_DB"
 
 else
    echo "$RESTOREDIR is empty - that would be the end of that"

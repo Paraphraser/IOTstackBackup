@@ -66,9 +66,9 @@ if ! isContainerRunning "$CONTAINER" ; then
    exit 0
 fi
 
-# docker-compose should have created the path to the backup directory
+# docker compose should have created the path to the backup directory
 if [ ! -d "$INFLUXBACKUP" ] ; then
-   echo "$INFLUXBACKUP does not exist. This is usually created by docker-compose."
+   echo "$INFLUXBACKUP does not exist. This is usually created by docker compose."
    echo "Has InfluxDB 2 been initialised properly?"
    exit 1
 fi

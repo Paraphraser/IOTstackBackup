@@ -95,7 +95,7 @@ if [ $(ls -1 "$RESTOREDIR" | wc -l) -gt 0 ] ; then
 
    # bring up the container (initialises everything else)
    echo "activating $CONTAINER (temporarily)"
-   docker-compose -f "$COMPOSE" up -d "$CONTAINER"
+   docker compose --project-directory "$IOTSTACK" up -d "$CONTAINER"
 
    # wait for the container to be ready
    while ! docker exec "$CONTAINER" pg_isready >/dev/null 2>&1 ; do
@@ -135,7 +135,7 @@ if [ $(ls -1 "$RESTOREDIR" | wc -l) -gt 0 ] ; then
    
    # take down the service
    echo "deactivating $CONTAINER"
-   docker-compose -f "$COMPOSE" rm --force --stop -v "$CONTAINER"
+   docker compose --project-directory "$IOTSTACK" rm --force --stop -v "$CONTAINER"
 
 else
    echo "$RESTOREDIR is empty - that would be the end of that"

@@ -141,7 +141,7 @@ sudo rm -rf "$RESTOREDIR"
 
 # bring up the wordpress_db container (done early to give time to start)
 echo "activating $CONTAINER_DB (temporarily)"
-docker-compose -f "$COMPOSE" up -d "$CONTAINER_DB"
+docker compose --project-directory "$IOTSTACK" up -d "$CONTAINER_DB"
 
 # extra stabilisation time - prophylactic
 sleep 3
@@ -201,6 +201,6 @@ sleep 3
 
 # take down the database again
 echo "deactivating $CONTAINER_DB"
-docker-compose -f "$COMPOSE" rm --force --stop -v "$CONTAINER_DB"
+docker compose --project-directory "$IOTSTACK" rm --force --stop -v "$CONTAINER_DB"
 
 echo "----- Finished $SCRIPT at $(date) -----"

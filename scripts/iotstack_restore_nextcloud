@@ -192,7 +192,7 @@ rm -rf "$RESTOREDIR"
 
 # bring up the nextcloud_db container (done early to give time to start)
 echo "activating $CONTAINER_DB (temporarily)"
-docker-compose -f "$COMPOSE" up -d "$CONTAINER_DB"
+docker compose --project-directory "$IOTSTACK" up -d "$CONTAINER_DB"
 
 # extra stabilisation time - prophylactic
 sleep 3
@@ -250,7 +250,7 @@ docker exec "$CONTAINER_DB" bash -c "$COMMAND $OPTIONS \$MYSQL_DATABASE </backup
 sleep 3
 
 echo "activating $CONTAINER (temporarily)"
-docker-compose -f "$COMPOSE" up -d "$CONTAINER"
+docker compose --project-directory "$IOTSTACK" up -d "$CONTAINER"
 
 echo "waiting for $CONTAINER to start"
 RETRIES=30
@@ -293,6 +293,6 @@ docker exec -u www-data -it "$CONTAINER" php occ maintenance:mode --off
 
 # take down nextcloud service
 echo "deactivating $CONTAINER and $CONTAINER_DB"
-docker-compose -f "$COMPOSE" rm --force --stop -v "$CONTAINER" "$CONTAINER_DB"
+docker compose --project-directory "$IOTSTACK" rm --force --stop -v "$CONTAINER" "$CONTAINER_DB"
 
 echo "----- Finished $SCRIPT at $(date) -----"

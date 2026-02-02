@@ -64,13 +64,13 @@ if isContainerRunning "$CONTAINER" ; then
 	[ -f "$EXTERNALCQS" -a ! -s "$EXTERNALCQS" ] && rm "$EXTERNALCQS"
 
 	echo "deactivating $CONTAINER"
-	docker-compose -f "$COMPOSE" rm --force --stop -v "$CONTAINER"
+	docker compose --project-directory "$IOTSTACK" rm --force --stop -v "$CONTAINER"
 
 	echo "removing the running database"
 	sudo rm -rf "$INFLUXDATA"
 
 	echo "restarting $CONTAINER"
-	docker-compose -f "$COMPOSE" up -d "$CONTAINER"
+	docker compose --project-directory "$IOTSTACK" up -d "$CONTAINER"
 
 	# wait for influx to be ready
 	while ! docker exec "$CONTAINER" curl -s "http://localhost:8086" >/dev/null 2>&1 ; do

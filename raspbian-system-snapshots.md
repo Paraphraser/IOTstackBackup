@@ -6,14 +6,14 @@ Raspberry Pi failures can be categorised into those that affect the Pi itself, a
 
 If your media has gone splat and you happen to have a reasonably up-to-date image, you can probably get away with restoring that image to the same or new media but you also take the risk that you are restoring the very conditions that led to the media failure in the first place. You are usually better advised to cut your losses and start with a clean image of Raspberry Pi OS.  
 
-If you use [PiBuilder](https://github.com/Paraphraser/PiBuilder) to build your Raspberry Pi OS, it will clone IOTstack plus install docker and docker-compose along with all their dependencies and useful packages. If you have been sufficiently diligent about maintaining your own clone of PiBuilder, it can make a fair fist of rebuilding your Pi "as it was" with customised configuration files in `/boot`, `/etc` and so on.
+If you use [PiBuilder](https://github.com/Paraphraser/PiBuilder) to build your Raspberry Pi OS, it will clone IOTstack plus install `docker` and `docker compose` along with all their dependencies and useful packages. If you have been sufficiently diligent about maintaining your own clone of PiBuilder, it can make a fair fist of rebuilding your Pi "as it was" with customised configuration files in `/boot`, `/etc` and so on.
 
 If you use `iotstack_backup` then recovering your IOTstack can be as simple as:
 
 ```
 $ iotstack_restore «runtag»
 $ cd ~/IOTstack
-$ docker-compose up -d
+$ docker compose up -d
 ```
 
 But there will still probably be a few gaps, such as:

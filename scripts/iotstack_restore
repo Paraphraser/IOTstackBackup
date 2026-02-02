@@ -145,7 +145,7 @@ if [ -e "$COMPOSE" ] ; then
    if isStackUp "$PROJECT" ; then
 
       echo "Deactivating $PROJECT"
-      docker-compose -f "$COMPOSE" down
+      docker compose --project-directory "$IOTSTACK" down
 
       # the stack should be re-launched on exit
       RESTART="YES"
@@ -173,7 +173,7 @@ if [ "$RESTART" = "YES" ] ; then
 
    # yes! if RESTART=YES then COMPOSE must exist
    echo "Reactivating the stack"
-   docker-compose -f "$COMPOSE" up -d
+   docker compose --project-directory "$IOTSTACK" up -d
 
 fi
 

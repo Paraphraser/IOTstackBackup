@@ -120,7 +120,7 @@ sudo tar -x --same-owner -f "$RESTORE_TAR" -C "$EXTERNALBACKUPDB"
 
 # bring up the influxdb container (done early to give time to start)
 echo "activating $CONTAINER (temporarily)"
-docker-compose -f "$COMPOSE" up -d "$CONTAINER"
+docker compose --project-directory "$IOTSTACK" up -d "$CONTAINER"
 
 # wait for influx to be ready
 while ! docker exec "$CONTAINER" curl -s "http://localhost:8086" >/dev/null 2>&1 ; do
@@ -165,7 +165,7 @@ fi
 
 # take down influxdb
 echo "deactivating $CONTAINER"
-docker-compose -f "$COMPOSE" rm --force --stop -v "$CONTAINER"
+docker compose --project-directory "$IOTSTACK" rm --force --stop -v "$CONTAINER"
 
 echo "----- Finished $SCRIPT at $(date) -----"
 

@@ -308,8 +308,8 @@ Nextcloud backup and restore was introduced in September 2021; MariaDB in May 20
 
 	``` console
 	$ cd ~/IOTstack
-	$ docker-compose build --no-cache --pull «container»
-	$ docker-compose up -d «container»
+	$ docker compose build --no-cache --pull «container»
+	$ docker compose up -d «container»
 	```
 
 	where:
@@ -1292,7 +1292,7 @@ Note:
 
 * The presence of a backup file for a container assumes the existence of a corresponding service definition in the compose file. Violating this assumption will lead to a mess.
 
-	To put this another way, restoring a database container needs the involvement of the database engine. The only way the database engine can be made available to the restore script is if docker-compose can bring up the relevant container when commanded to do so by the script and that, in turn, relies on the existence of an appropriate service definition in the compose file.
+	To put this another way, restoring a database container needs the involvement of the database engine. The only way the database engine can be made available to the restore script is if `docker compose` can bring up the relevant container when commanded to do so by the script and that, in turn, relies on the existence of an appropriate service definition in the compose file.
 
 	This is also why [`iotstack_restore_general`](#iotstackRestoreGeneral) runs first, because it is assumed to guarantee the presence of an appropriate compose file, particularly during a bare-metal restore. 
 
@@ -1303,7 +1303,7 @@ Scenario. Your SD card wears out, or your Raspberry Pi emits magic smoke, or you
 
 1. Use [PiBuilder](https://github.com/Paraphraser/PiBuilder) to construct a new operating system. Starting from a new SD card or SSD with a fresh Raspberry Pi OS image, PiBuilder:
  
-	* Installs all the dependencies, including Docker and Docker-Compose
+	* Installs all the dependencies, including `docker`` and `docker compose`
 	* Installs all recommended system patches
 	* Clones the [SensorsIot/IOTstack](https://github.com/SensorsIot/IOTstack) repository
 	* Clones and installs this IOTstackBackup repository; and
@@ -1599,7 +1599,7 @@ If you are in the situation where you want to migrate to a new system but you we
 
 	``` console
 	$ cd ~/IOTstack
-	$ docker-compose up -d
+	$ docker compose up -d
 	```
 
 <a name="migrationLimits"></a>
@@ -1615,7 +1615,7 @@ For example, if you have a container named "example" which is non-copy-safe, you
 
 ``` console
 $ cd ~/IOTstack
-$ docker-compose rm --force --stop -v example
+$ docker compose rm --force --stop -v example
 $ cd ~/migration
 $ iotstack_migration_backup
 ```
