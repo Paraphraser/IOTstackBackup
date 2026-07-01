@@ -55,11 +55,9 @@ if [ -e "$BACKUP_TAR" ] ; then
 fi
 
 # assumptions
-COMPOSENAME="docker-compose.yml"
 CQSNAME="continuous-queries.influxql"
 EPILOGNAME="iotstack_restore_$CONTAINER.epilog"
 
-COMPOSE="$IOTSTACK/$COMPOSENAME"
 BACKUPS="$IOTSTACK/backups"
 EXTERNALEPILOG="$IOTSTACK/services/$CONTAINER/$EPILOGNAME"
 INTERNALEPILOG="/$(uuidgen).epilog"

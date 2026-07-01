@@ -54,8 +54,6 @@ if [ -e "$BACKUP_TAR" ] ; then
 fi
 
 # assumptions
-COMPOSENAME="docker-compose.yml"
-COMPOSE="$IOTSTACK/$COMPOSENAME"
 INFLUXSTORE="$IOTSTACK/volumes/$CONTAINER"
 INFLUXBACKUP="$INFLUXSTORE/backup"
 INFLUXENGINE="./data/engine"

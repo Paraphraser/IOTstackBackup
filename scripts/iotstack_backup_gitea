@@ -82,8 +82,6 @@ if [ -e "$BACKUP_TAR_GZ" ] ; then
 fi
 
 # assumptions
-COMPOSENAME="docker-compose.yml"
-COMPOSE="$IOTSTACK/$COMPOSENAME"
 VOLUMES="$IOTSTACK/volumes"
 GITEA_VOLUMES="$VOLUMES/$CONTAINER"
 GITEA_DIR="data"

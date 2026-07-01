@@ -45,13 +45,10 @@ if isStackUp "$PROJECT" ; then
    exit 1
 fi
 
-# the compose file must not exist
-COMPOSE="$IOTSTACK/docker-compose.yml"
-[ -e "$COMPOSE" ] && echo "Error: $COMPOSE already exists" && exit 1
-
-# the .env must not exist
-ENVFILE="$IOTSTACK/.env"
-[ -e "$ENVFILE" ] && echo "Error: $ENVFILE already exists" && exit 1
+# these files must not exist
+for F in "docker-compose.yml" "docker-compose.override.yml" ".env" ; do
+   [ -e "$IOTSTACK/$F" ] && echo "Error: $F already exists" && exit 1
+done
 
 # in most cases, services and volumes will not exist but, if they do,
 # the subordinate scripts will adopt merging behaviour

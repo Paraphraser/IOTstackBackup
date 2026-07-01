@@ -106,6 +106,9 @@ if [ -d "$SERVICESRESTOREDIR" ] ; then
    # make sure the services root exists
    mkdir -p "$SERVICESROOT"
 
+   # we need to match on hidden contents too
+   shopt -s dotglob
+
    # iterate the restored contents
    for SPATH in "$SERVICESRESTOREDIR"/* ; do
 
@@ -119,6 +122,9 @@ if [ -d "$SERVICESRESTOREDIR" ] ; then
       sudo mv "$SPATH" "$DPATH"
 
    done
+
+   # go back to default globbing behaviour
+   shopt -u dotglob
 
    # ensure services owned by current user
    sudo chown -R "$USER:$USER" "$SERVICESROOT"

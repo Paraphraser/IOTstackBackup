@@ -23,9 +23,6 @@ isContainerRunning() {
    return 1
 }
 
-# the compose file is
-COMPOSENAME="docker-compose.yml"
-COMPOSE="$IOTSTACK/$COMPOSENAME"
 
 # the persistent store is
 INFLUXSTORE="$IOTSTACK/volumes/$CONTAINER"
