@@ -159,51 +159,47 @@ if [ -d "$VOLUMESRESTOREDIR" ] ; then
 
 fi
 
-# restore whatever remains into ~/IOTstack
-for SPATH in "$RESTOREDIR"/* "$RESTOREDIR"/.*; do
+# special-handling for .env.
+SNAME=".env"
+SPATH="$RESTOREDIR/$SNAME"
+DPATH="$IOTSTACK/$SNAME"
+if [ -f "$SPATH" ] ; then
+	if [ -f "$DPATH" ] ; then
+		cmp "$SPATH" "$DPATH" >/dev/null 2>&1
+		if [ $? -ne 0 ] ; then
+			echo "Merging existing $SNAME with $SNAME from backup"
+			sort "$DPATH" "$SPATH" | uniq > "$DPATH"
+			sudo chown "$USER:$USER" "$DPATH"
+		else
+			echo "$SNAME already exists and compares same - skipped"
+		fi
+	fi
+fi
 
-   # is the inclusion a file (filters . .. and other junk)
-   if [ -f "$SPATH" ] ; then
 
-      SNAME=$(basename "$SPATH")
-      DPATH="$IOTSTACK/$SNAME"
-
-      # does the destination exist?
-      if [ -e "$DPATH" ] ; then
-
-         # yes! compare the two files
-         cmp "$SPATH" "$DPATH" >/dev/null 2>&1
-
-         # do the two files compare same?
-         if [ $? -ne 0 ] ; then
-
-             # no! move the restored version into place with a tag
-             echo "Restoring $SNAME as $SNAME.$RUNDATE"
-             mv "$SPATH" "$DPATH.$RUNDATE"
-
-             # ensure owned by current user
-             sudo chown "$USER:$USER" "$DPATH.$RUNDATE"
-
-         else
-
-             echo "$SNAME already exists and compares same - skipped"
-
-         fi
-
-      else
-
-         # no! move the restored version into place
-         echo "Restoring $SNAME"
-         mv "$SPATH" "$DPATH"
-
-         # ensure owned by current user
-         sudo chown "$USER:$USER" "$DPATH"
-
-      fi
-
-   fi
-
+# restore whatever FILES remain into ~/IOTstack
+shopt -s dotglob
+for SPATH in "$RESTOREDIR"/* ; do
+	[ -f "$SPATH" ] || continue
+	SNAME=$(basename "$SPATH")
+	[ "$SNAME" = ".env" ] && continue
+	DPATH="$IOTSTACK/$SNAME"
+	if [ -e "$DPATH" ] ; then
+		cmp "$SPATH" "$DPATH" >/dev/null 2>&1
+		if [ $? -ne 0 ] ; then
+			echo "Restoring $SNAME as $SNAME.$RUNDATE"
+			mv "$SPATH" "$DPATH.$RUNDATE"
+			sudo chown "$USER:$USER" "$DPATH.$RUNDATE"
+		else
+			echo "$SNAME already exists and compares same - skipped"
+		fi
+	else
+		echo "Restoring $SNAME"
+		mv "$SPATH" "$DPATH"
+		sudo chown "$USER:$USER" "$DPATH"
+	fi
 done
+shopt -u dotglob
 
 echo "Cleaning up"
 rm -rf "$RESTOREDIR"
