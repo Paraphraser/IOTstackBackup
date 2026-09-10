@@ -169,10 +169,12 @@ if [ -f "$SPATH" ] ; then
 		if [ $? -ne 0 ] ; then
 			echo "Merging existing $SNAME with $SNAME from backup"
 			sort "$DPATH" "$SPATH" | uniq > "$DPATH"
-			sudo chown "$USER:$USER" "$DPATH"
 		else
 			echo "$SNAME already exists and compares same - skipped"
 		fi
+		rm "$SPATH"
+	else
+		mv "$SPATH" "$DPATH"
 	fi
 fi
 
@@ -182,7 +184,6 @@ shopt -s dotglob
 for SPATH in "$RESTOREDIR"/* ; do
 	[ -f "$SPATH" ] || continue
 	SNAME=$(basename "$SPATH")
-	[ "$SNAME" = ".env" ] && continue
 	DPATH="$IOTSTACK/$SNAME"
 	if [ -e "$DPATH" ] ; then
 		cmp "$SPATH" "$DPATH" >/dev/null 2>&1
