@@ -180,11 +180,16 @@ case "$CLOUD_METHOD" in
 
 esac
 
-# cleanup: containers - "influx" not "influxdb" - then logs as a special case
-for C in "general" "influx" "influxdb2" "nextcloud" "mariadb" "postgres" "wordpress"; do
-   ls -t1 *."$C-backup".* 2>/dev/null | tail -n +$LOCAL_RETAIN | xargs rm -f
+# cleanup file groups older than LOCAL_RETAIN (note that there is a strong dependency
+# on IOTstackBackup being in control of ~/IOTstack/backups. In particular, the result is
+# undefined if a user creates files or directories containing embedded spaces etc which
+# cause the ls wildcard-matching to tokenise incorrectly.
+MATCH=""; RETAIN=0
+for C in $(ls -t1 *-backup.* *.backup-log.txt) ; do
+	PREFIX=${C::15}
+	[ "${PREFIX}" != "${MATCH}" ] && RETAIN=$(($RETAIN+1)) && MATCH="${PREFIX}"
+	[ $RETAIN -gt $LOCAL_RETAIN ] && rm -f "${C}"
 done
-ls -t1 *."$LOGNAME".* 2>/dev/null | tail -n +$LOCAL_RETAIN | xargs rm -f
 
 
 echo "----- Finished $SCRIPT at $(date) -----"
